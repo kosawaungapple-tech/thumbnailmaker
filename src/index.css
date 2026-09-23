@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+/* 
+  Custom Local Fonts Setup
+  ၁။ သင်၏ .ttf ဖိုင်များကို /public/fonts/ ထဲသို့ Upload တင်ပါ။
+  ၂။ ဖိုင်အမည်များကို font1.ttf, font2.ttf စသည်ဖြင့် ပြောင်းပေးပါ။
+*/
+
+@font-face {
+  font-family: 'CustomFont1';
+  src: url('./fonts/font1.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'CustomFont2';
+  src: url('./fonts/font2.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'CustomFont3';
+  src: url('./fonts/font3.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'CustomFont4';
+  src: url('./fonts/font4.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'CustomFont5';
+  src: url('./fonts/font5.ttf') format('truetype');
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@100;300;400;500;700;800;900&family=Padauk:wght@400;700&family=Montserrat:wght@100;300;400;500;700;900&family=Playfair+Display:wght@400;700;900&family=Bebas+Neue&family=Inter:wght@100;300;400;500;700;900&display=swap');
+
+body {
+  font-family: 'Noto Sans Myanmar', sans-serif;
+}
