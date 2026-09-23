@@ -31,6 +31,7 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
     display: 'flex',
     flexDirection: 'column',
     justifyContent: state.canvasRatio === '9:16' ? 'flex-start' : 'center',
+    alignItems: ((state.textAlignment === 'center' && !state.characterImage) || state.canvasRatio === '9:16') ? 'center' : 'flex-start',
     padding: state.canvasRatio === '9:16' ? '120px 60px' : '60px',
     color: 'white',
     boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
@@ -42,8 +43,29 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
         <img 
           src={state.background} 
           alt="Background" 
-          crossOrigin="anonymous"
+          crossOrigin={state.background.startsWith('data:') ? undefined : 'anonymous'}
           referrerPolicy="no-referrer"
+          loading="eager"
+          decoding="sync"
+          onError={(e) => {
+            // Auto fallback if external image fails (e.g. offline or blocked)
+            const target = e.currentTarget;
+            const fallbackSvg = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+                <defs>
+                  <radialGradient id="fbGlow" cx="50%" cy="40%" r="70%">
+                    <stop offset="0%" stop-color="#1e3a8a" stop-opacity="0.8" />
+                    <stop offset="50%" stop-color="#0f172a" />
+                    <stop offset="100%" stop-color="#020617" />
+                  </radialGradient>
+                </defs>
+                <rect width="1280" height="720" fill="url(#fbGlow)" />
+              </svg>
+            `.trim())}`;
+            if (target.src !== fallbackSvg) {
+              target.src = fallbackSvg;
+            }
+          }}
           style={{
             position: 'absolute',
             inset: 0,
@@ -62,6 +84,7 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
           style={{
             position: 'absolute',
             inset: 0,
+            background: state.background,
             backgroundImage: state.background,
             filter: `brightness(${state.bgBrightness}%) saturate(${state.bgSaturation}%)`,
             zIndex: 0
@@ -80,10 +103,22 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
     zIndex: 1,
   };
 
+  const isCentered = state.textAlignment === 'center';
+  const isRight = state.textAlignment === 'right';
+  const textAlignVal = state.textAlignment || 'left';
+
   const contentStyle: React.CSSProperties = {
     position: 'relative',
     zIndex: 10,
-    maxWidth: state.canvasRatio === '9:16' ? '100%' : '65%',
+    maxWidth: state.canvasRatio === '9:16' 
+      ? '100%' 
+      : state.characterImage 
+        ? '65%' 
+        : isCentered 
+          ? '90%' 
+          : '75%',
+    width: (state.canvasRatio === '9:16' || (isCentered && !state.characterImage)) ? '100%' : 'auto',
+    margin: (isCentered && !state.characterImage) ? '0 auto' : undefined,
   };
 
   const shadowBlur = state.textShadowBlur !== undefined ? state.textShadowBlur : state.textShadow * 2;
@@ -161,94 +196,6 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
     }
     
     return filters.join(' ');
-  };
-
-  const getTitleAnimationStyle = (
-    target: 'title1' | 'title2'
-  ): React.CSSProperties => {
-    if (!state.titleAnimation || state.titleAnimation === 'none') {
-      return {};
-    }
-
-    if (state.animationTarget && state.animationTarget !== 'both' && state.animationTarget !== target) {
-      return {};
-    }
-
-    const duration = state.animationDuration || 0.8;
-    const delay = target === 'title2' ? (state.animationDelay || 0) + 0.15 : (state.animationDelay || 0);
-    const isInfinite = state.animationIteration === 'infinite';
-
-    let animationName = '';
-    let timingFunction = 'cubic-bezier(0.16, 1, 0.3, 1)';
-    let iterationCount = isInfinite ? 'infinite' : '1';
-    let fillMode = 'both';
-    let direction = 'normal';
-
-    switch (state.titleAnimation) {
-      case 'fadeIn':
-        animationName = 'titleFadeIn';
-        timingFunction = 'ease-out';
-        if (isInfinite) direction = 'alternate';
-        break;
-      case 'slideUp':
-        animationName = 'titleSlideUp';
-        timingFunction = 'cubic-bezier(0.16, 1, 0.3, 1)';
-        if (isInfinite) direction = 'alternate';
-        break;
-      case 'slideDown':
-        animationName = 'titleSlideDown';
-        timingFunction = 'cubic-bezier(0.16, 1, 0.3, 1)';
-        if (isInfinite) direction = 'alternate';
-        break;
-      case 'slideLeft':
-        animationName = 'titleSlideLeft';
-        timingFunction = 'cubic-bezier(0.16, 1, 0.3, 1)';
-        if (isInfinite) direction = 'alternate';
-        break;
-      case 'slideRight':
-        animationName = 'titleSlideRight';
-        timingFunction = 'cubic-bezier(0.16, 1, 0.3, 1)';
-        if (isInfinite) direction = 'alternate';
-        break;
-      case 'scale':
-        animationName = 'titleScale';
-        timingFunction = 'cubic-bezier(0.16, 1, 0.3, 1)';
-        if (isInfinite) direction = 'alternate';
-        break;
-      case 'popBounce':
-        animationName = 'titlePopBounce';
-        timingFunction = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
-        if (isInfinite) direction = 'alternate';
-        break;
-      case 'flipIn':
-        animationName = 'titleFlipIn';
-        timingFunction = 'cubic-bezier(0.16, 1, 0.3, 1)';
-        if (isInfinite) direction = 'alternate';
-        break;
-      case 'pulseGlow':
-        animationName = 'titlePulseGlow';
-        timingFunction = 'ease-in-out';
-        iterationCount = 'infinite';
-        break;
-      case 'float':
-        animationName = 'titleFloat';
-        timingFunction = 'ease-in-out';
-        iterationCount = 'infinite';
-        break;
-      default:
-        return {};
-    }
-
-    return {
-      animationName,
-      animationDuration: `${duration}s`,
-      animationTimingFunction: timingFunction,
-      animationDelay: `${delay}s`,
-      animationIterationCount: iterationCount,
-      animationFillMode: fillMode,
-      animationDirection: direction,
-      willChange: 'transform, opacity',
-    };
   };
 
   const [dimensions, setDimensions] = React.useState<{ width: number; height: number }>({ width: 0, height: 0 });
@@ -541,8 +488,9 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
               ...contentStyle,
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'flex-start',
-              gap: '2rem',
+              alignItems: isCentered ? 'center' : isRight ? 'flex-end' : 'flex-start',
+              textAlign: textAlignVal,
+              gap: state.canvasRatio === '9:16' ? '1.5rem' : '2rem',
             }}
           >
             {state.highlight && (
@@ -563,10 +511,11 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                   display: 'inline-block',
                   width: 'fit-content',
                   maxWidth: 'max-content',
-                  alignSelf: 'flex-start',
-                  fontSize: '40px',
+                  alignSelf: isCentered ? 'center' : isRight ? 'flex-end' : 'flex-start',
+                  textAlign: 'center',
+                  fontSize: state.canvasRatio === '9:16' ? '32px' : '40px',
                   fontWeight: '900',
-                  fontFamily: state.fontFamily || state.titleFont,
+                  fontFamily: state.highlightFont || state.fontFamily || state.titleFont,
                   borderRadius: '10px',
                   boxShadow: '0 15px 30px -10px rgba(0,0,0,0.5)',
                   cursor: 'grab',
@@ -594,23 +543,24 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                 cursor: 'grab',
                 userSelect: 'none',
                 touchAction: 'none',
-                maxWidth: '950px',
+                maxWidth: state.canvasRatio === '9:16' ? '650px' : '950px',
                 transformOrigin: 'center center',
                 display: 'inline-block',
+                alignSelf: isCentered ? 'center' : isRight ? 'flex-end' : 'flex-start',
+                textAlign: textAlignVal,
                 mixBlendMode: (state.titleBlendMode && state.titleBlendMode !== 'normal') ? (state.titleBlendMode as React.CSSProperties['mixBlendMode']) : undefined,
                 ...titleBorderBoxStyle,
               }}
             >
               <h1
-                key={`title1-anim-${state.titleAnimation || 'none'}-${state.animationPlayKey || 0}`}
                 style={{
                   fontSize: `${state.titleSize}px`,
-                  fontFamily: state.titleFont,
+                  fontFamily: state.titleFont || state.fontFamily,
                   lineHeight: state.lineHeight,
                   letterSpacing: `${state.letterSpacing || 0}px`,
                   fontWeight: '900',
+                  textAlign: textAlignVal,
                   ...getTitleTextStyle('title1'),
-                  ...getTitleAnimationStyle('title1'),
                 }}
               >
                 {state.title || "Your Epic Title Here"}
@@ -632,21 +582,22 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                   cursor: 'grab',
                   userSelect: 'none',
                   touchAction: 'none',
-                  maxWidth: '950px',
+                  maxWidth: state.canvasRatio === '9:16' ? '650px' : '950px',
                   display: 'inline-block',
+                  alignSelf: isCentered ? 'center' : isRight ? 'flex-end' : 'flex-start',
+                  textAlign: textAlignVal,
                   mixBlendMode: (state.titleBlendMode && state.titleBlendMode !== 'normal') ? (state.titleBlendMode as React.CSSProperties['mixBlendMode']) : undefined,
                 }}
               >
                 <h1
-                  key={`title2-anim-${state.titleAnimation || 'none'}-${state.animationPlayKey || 0}`}
                   style={{
                     fontSize: `${state.title2Size}px`,
-                    fontFamily: state.titleFont,
+                    fontFamily: state.title2Font || state.titleFont || state.fontFamily,
                     lineHeight: state.lineHeight,
                     letterSpacing: `${state.letterSpacing || 0}px`,
                     fontWeight: '900',
+                    textAlign: textAlignVal,
                     ...getTitleTextStyle('title2'),
-                    ...getTitleAnimationStyle('title2'),
                   }}
                 >
                   {state.title2}
@@ -666,7 +617,8 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                 initial={false}
                 animate={{ x: state.subtitlePos.x, y: state.subtitlePos.y }}
                 style={{
-                  fontSize: '52px',
+                  fontSize: state.canvasRatio === '9:16' ? '40px' : '52px',
+                  fontFamily: state.subtitleFont || state.fontFamily || state.titleFont,
                   fontWeight: '600',
                   color: state.subtitleColor,
                   opacity: 0.95,
@@ -674,6 +626,8 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                   userSelect: 'none',
                   touchAction: 'none',
                   lineHeight: '1.4',
+                  alignSelf: isCentered ? 'center' : isRight ? 'flex-end' : 'flex-start',
+                  textAlign: textAlignVal,
                   backgroundColor: state.subtitleBgEnabled ? state.subtitleBg : 'transparent',
                   padding: state.subtitleBgEnabled ? '8px 24px' : '0',
                   borderRadius: state.subtitleBgEnabled ? '12px' : '0',

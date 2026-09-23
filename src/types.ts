@@ -32,6 +32,8 @@ export type TitleAnimationType =
   | 'pulseGlow'
   | 'float';
 
+export type TextAlignmentType = 'left' | 'center' | 'right';
+
 export interface ThumbnailState {
   title: string;
   title2: string;
@@ -40,6 +42,7 @@ export interface ThumbnailState {
   idea: string;
   background: string;
   backgroundType: 'color' | 'gradient' | 'image';
+  selectedBgId?: string;
   // Character/Person layer
   characterImage: string | null;
   characterScale: number;
@@ -72,6 +75,7 @@ export interface ThumbnailState {
   highlightColor: string;
   highlightBg: string;
   highlightPadding: number;
+  highlightFont?: string;
   theme: ThemeType;
   overlayOpacity: number;
   lineHeight: number;
@@ -79,19 +83,22 @@ export interface ThumbnailState {
   titleSize: number;
   title2Size: number;
   titleFont: string;
+  title2Font?: string;
+  subtitleFont?: string;
   titleRotation: number;
   titleBlendMode?: BlendModeType;
+  textAlignment?: TextAlignmentType;
   titleBorderWidth?: number;
   titleBorderColor?: string;
   titleBorderRadius?: number;
   titleBorderBg?: string;
-  // Motion / CSS Animations
-  titleAnimation: TitleAnimationType;
-  animationDuration: number;
-  animationDelay: number;
-  animationIteration: 'once' | 'infinite';
-  animationTarget: 'title1' | 'title2' | 'both';
-  animationPlayKey: number;
+  // Motion / CSS Animations (Optional)
+  titleAnimation?: TitleAnimationType;
+  animationDuration?: number;
+  animationDelay?: number;
+  animationIteration?: 'once' | 'infinite';
+  animationTarget?: 'title1' | 'title2' | 'both';
+  animationPlayKey?: number;
   // Drag positions
   titlePos: { x: number; y: number };
   title2Pos: { x: number; y: number };
@@ -108,4 +115,7 @@ export interface ThumbnailState {
 export interface FontConfig {
   name: string;
   family: string;
+  isCustom?: boolean;
+  id?: string;
+  fileName?: string;
 }

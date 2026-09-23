@@ -10,6 +10,7 @@ import { toPng } from 'html-to-image';
 import confetti from 'canvas-confetti';
 import { removeBackground } from '@imgly/background-removal';
 import { BUILTIN_BACKGROUNDS, BackgroundItem } from './data/backgrounds';
+import { urlToDataUrl, processUploadedFile, preloadAllImagesInElement } from './utils/imageUtils';
 import { 
   Download, 
   Image as ImageIcon, 
@@ -34,34 +35,34 @@ import {
   Smartphone,
   X,
   AlertCircle,
-  Film,
-  Play,
-  RotateCcw,
   Zap,
-  ArrowUp,
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  Maximize2,
-  Activity,
-  Eye,
-  Slash
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  LayoutList,
+  Upload,
+  Trash2,
+  CheckCircle2,
+  FileType,
+  Plus
 } from 'lucide-react';
+import {
+  CustomFontRecord,
+  loadAndRegisterStoredFonts,
+  saveCustomFont,
+  deleteCustomFont,
+} from './utils/customFontStorage';
 
-const MYANMAR_FONTS: FontConfig[] = [
+const DEFAULT_BURMESE_FONTS: FontConfig[] = [
   { name: 'Noto Sans Myanmar', family: 'Noto Sans Myanmar' },
   { name: 'Padauk (Standard)', family: 'Padauk' },
   { name: 'Pyidaungsu (Regular)', family: 'Pyidaungsu' },
   { name: 'Zawyika', family: 'Zawyika' },
   { name: 'TharLon', family: 'TharLon' },
   { name: 'Myanmar3', family: 'Myanmar3' },
-  { name: '--- Custom Local Fonts ---', family: 'Noto Sans Myanmar' }, // Separator
-  { name: 'Custom Font 1 (font1.ttf)', family: 'CustomFont1' },
-  { name: 'Custom Font 2 (font2.ttf)', family: 'CustomFont2' },
-  { name: 'Custom Font 3 (font3.ttf)', family: 'CustomFont3' },
-  { name: 'Custom Font 4 (font4.ttf)', family: 'CustomFont4' },
-  { name: 'Custom Font 5 (font5.ttf)', family: 'CustomFont5' },
-  { name: '--- English Fonts ---', family: 'Inter' }, // Separator
+];
+
+const DEFAULT_ENGLISH_FONTS: FontConfig[] = [
   { name: 'Inter (English)', family: 'Inter' },
   { name: 'Montserrat (Bold)', family: 'Montserrat' },
   { name: 'Playfair Display (Serif)', family: 'Playfair Display' },
@@ -76,6 +77,7 @@ const INITIAL_STATE: ThumbnailState = {
   idea: '',
   background: BUILTIN_BACKGROUNDS[0].url,
   backgroundType: 'image',
+  selectedBgId: BUILTIN_BACKGROUNDS[0].id,
   characterImage: null,
   characterScale: 100,
   characterPosition: 5,
@@ -104,6 +106,7 @@ const INITIAL_STATE: ThumbnailState = {
   highlightColor: '#000000',
   highlightBg: '#facc15',
   highlightPadding: 16,
+  highlightFont: 'Noto Sans Myanmar',
   theme: 'modern',
   overlayOpacity: 20,
   lineHeight: 1.35,
@@ -111,8 +114,11 @@ const INITIAL_STATE: ThumbnailState = {
   titleSize: 110,
   title2Size: 110,
   titleFont: 'Noto Sans Myanmar',
+  title2Font: 'Noto Sans Myanmar',
+  subtitleFont: 'Noto Sans Myanmar',
   titleRotation: 0,
   titleBlendMode: 'normal',
+  textAlignment: 'left',
   titleBorderWidth: 0,
   titleBorderColor: '#ffffff',
   titleBorderRadius: 16,
@@ -134,13 +140,108 @@ const INITIAL_STATE: ThumbnailState = {
   canvasRatio: '16:9',
 };
 
+interface FontSelectorProps {
+  value: string;
+  onChange: (font: string) => void;
+  customFonts: CustomFontRecord[];
+  label?: string;
+  description?: string;
+  showApplyAll?: boolean;
+  onApplyAll?: () => void;
+  onOpenCustomFontUpload?: () => void;
+}
+
+function FontSelector({
+  value,
+  onChange,
+  customFonts,
+  label = "Font ရွေးချယ်ရန်",
+  description,
+  showApplyAll,
+  onApplyAll,
+  onOpenCustomFontUpload,
+}: FontSelectorProps) {
+  return (
+    <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <FileType size={12} className="text-blue-400" />
+          <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider">
+            {label}
+          </label>
+        </div>
+        {onOpenCustomFontUpload && (
+          <button
+            type="button"
+            onClick={onOpenCustomFontUpload}
+            className="text-[9px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 hover:underline"
+          >
+            <Plus size={10} />
+            <span>+ Font သစ်တင်ရန်</span>
+          </button>
+        )}
+      </div>
+
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs text-white outline-none focus:border-blue-500 cursor-pointer font-bold transition-all pr-8"
+          style={{ fontFamily: value }}
+        >
+          {customFonts.length > 0 && (
+            <optgroup label="⭐ ကိုယ်ပိုင် Fonts (Custom Fonts)">
+              {customFonts.map((font) => (
+                <option key={font.id} value={font.family} style={{ fontFamily: font.family }}>
+                  ★ {font.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+
+          <optgroup label="🇲🇲 Myanmar Fonts (မြန်မာ ဖောင့်များ)">
+            {DEFAULT_BURMESE_FONTS.map((font) => (
+              <option key={font.name} value={font.family} style={{ fontFamily: font.family }}>
+                {font.name}
+              </option>
+            ))}
+          </optgroup>
+
+          <optgroup label="🔤 English / Numbers (အင်္ဂလိပ် ဖောင့်များ)">
+            {DEFAULT_ENGLISH_FONTS.map((font) => (
+              <option key={font.name} value={font.family} style={{ fontFamily: font.family }}>
+                {font.name}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+      </div>
+
+      {description && (
+        <p className="text-[9px] text-zinc-500 leading-relaxed">{description}</p>
+      )}
+
+      {showApplyAll && onApplyAll && (
+        <button
+          type="button"
+          onClick={onApplyAll}
+          className="w-full mt-1 py-1.5 px-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-lg text-[9px] font-bold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all"
+        >
+          <Sparkles size={11} className="text-blue-400" />
+          <span>စာသားအားလုံးကို ဤ Font သို့ တပြိုင်နက်ပြောင်းမည် (Apply to All)</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [state, setState] = useState<ThumbnailState>(INITIAL_STATE);
   const [history, setHistory] = useState<ThumbnailState[]>([]);
   const [future, setFuture] = useState<ThumbnailState[]>([]);
   const [isExporting, setIsExporting] = useState(false);
   const [isRemovingBg, setIsRemovingBg] = useState(false);
-  const [activeTab, setActiveTab] = useState<'content' | 'character' | 'style' | 'motion' | 'border' | 'settings'>('content');
+  const [activeTab, setActiveTab] = useState<'content' | 'character' | 'style' | 'border' | 'settings'>('content');
   const previewRef = useRef<HTMLDivElement>(null);
 
   // iPhone / Safari & General Export Modal States
@@ -153,6 +254,52 @@ export default function App() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+  const [activeBgCategory, setActiveBgCategory] = useState<'All' | 'Studio' | 'Spiritual' | 'Nature' | 'Pattern'>('All');
+
+  // Custom Font States
+  const [customFonts, setCustomFonts] = useState<CustomFontRecord[]>([]);
+  const [isFontUploading, setIsFontUploading] = useState(false);
+  const [fontUploadMessage, setFontUploadMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [customFontInputName, setCustomFontInputName] = useState('');
+  const fontFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load and register stored custom fonts from IndexedDB on startup
+  useEffect(() => {
+    loadAndRegisterStoredFonts()
+      .then((loaded) => {
+        setCustomFonts(loaded);
+      })
+      .catch((err) => {
+        console.warn('Failed to load custom fonts from storage:', err);
+      });
+  }, []);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setIsInstallable(false);
+    }
+    setDeferredPrompt(null);
+  };
 
   const undo = () => {
     if (history.length === 0) return;
@@ -191,6 +338,17 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [history, future, state]);
 
+  // Preload and convert default/initial background to base64 Data URL for instant, error-free mobile export
+  useEffect(() => {
+    if (state.backgroundType === 'image' && state.background && !state.background.startsWith('data:')) {
+      urlToDataUrl(state.background).then((dataUrl) => {
+        if (dataUrl && dataUrl.startsWith('data:')) {
+          updateState({ background: dataUrl }, false);
+        }
+      });
+    }
+  }, []);
+
   const handleExport = async () => {
     if (!previewRef.current) return;
     setIsExporting(true);
@@ -202,6 +360,38 @@ export default function App() {
     );
 
     try {
+      // STEP 1: Crucial Mobile Fix - Preload and decode all images in preview container
+      await preloadAllImagesInElement(previewRef.current);
+
+      // STEP 2: Ensure background image is converted to Base64 Data URL!
+      // On mobile browsers (Safari/WebKit), SVG foreignObject refuses to render external HTTP/HTTPS URLs.
+      // Converting to Data URL ensures 100% full background rendering on phones!
+      if (state.backgroundType === 'image' && state.background && !state.background.startsWith('data:')) {
+        const bgDataUrl = await urlToDataUrl(state.background);
+        if (bgDataUrl && bgDataUrl.startsWith('data:')) {
+          updateState({ background: bgDataUrl }, false);
+        }
+      }
+
+      // STEP 3: Directly inspect all <img> tags inside previewRef.current and inline them
+      const domImages = previewRef.current.querySelectorAll('img');
+      for (const img of Array.from(domImages)) {
+        if (img.src && !img.src.startsWith('data:')) {
+          const inlined = await urlToDataUrl(img.src);
+          if (inlined && inlined.startsWith('data:')) {
+            img.src = inlined;
+          }
+        }
+        if ('decode' in img) {
+          try {
+            await img.decode();
+          } catch {}
+        }
+      }
+
+      // Allow brief render tick for DOM & GPU sync
+      await new Promise(r => setTimeout(r, 60));
+
       const dims = state.canvasRatio === '9:16'
         ? { width: 720, height: 1280 }
         : state.canvasRatio === '1:1'
@@ -221,21 +411,21 @@ export default function App() {
       let dataUrl: string;
       try {
         dataUrl = await toPng(previewRef.current, {
-          cacheBust: true,
+          cacheBust: false, // CRITICAL: Never cacheBust Data URLs on mobile (avoids CORS failure)
           width: dims.width,
           height: dims.height,
           pixelRatio: exportPixelRatio,
-          backgroundColor: '#000000',
+          backgroundColor: state.backgroundType === 'color' ? state.background : '#000000',
           filter: filterFn,
         });
       } catch (firstErr) {
-        console.warn('Standard export failed, retrying with skipFonts: true and safe options...', firstErr);
+        console.warn('Standard export failed, retrying with safe fallback...', firstErr);
         dataUrl = await toPng(previewRef.current, {
           cacheBust: false,
           width: dims.width,
           height: dims.height,
-          pixelRatio: exportPixelRatio,
-          backgroundColor: '#000000',
+          pixelRatio: 1, // Safe 1x fallback
+          backgroundColor: state.backgroundType === 'color' ? state.background : '#000000',
           skipFonts: true,
           filter: filterFn,
         });
@@ -436,6 +626,14 @@ export default function App() {
       characterPos: { x: 0, y: 0 }
     });
     
+    if (randomPreset.background && randomPreset.backgroundType === 'image' && !randomPreset.background.startsWith('data:')) {
+      urlToDataUrl(randomPreset.background).then((dataUrl) => {
+        if (dataUrl && dataUrl.startsWith('data:')) {
+          updateState({ background: dataUrl }, false);
+        }
+      });
+    }
+    
     confetti({
       particleCount: 40,
       spread: 50,
@@ -485,19 +683,191 @@ export default function App() {
     }));
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'background' | 'characterImage') => {
+  const [autoArrangeFeedback, setAutoArrangeFeedback] = useState<string | null>(null);
+
+  const handleAutoArrange = (forcedAlign?: 'left' | 'center' | 'right') => {
+    const ratio = state.canvasRatio || '16:9';
+    
+    let targetAlign: 'left' | 'center' | 'right';
+    if (forcedAlign) {
+      targetAlign = forcedAlign;
+    } else if (ratio === '9:16') {
+      targetAlign = 'center';
+    } else if (ratio === '1:1') {
+      targetAlign = state.characterImage ? 'left' : 'center';
+    } else {
+      targetAlign = state.characterImage ? 'left' : 'center';
+    }
+
+    let adjustedTitleSize = state.titleSize;
+    let adjustedTitle2Size = state.title2Size;
+
+    if (ratio === '9:16') {
+      if (adjustedTitleSize > 105) adjustedTitleSize = 98;
+      if (adjustedTitle2Size > 85) adjustedTitle2Size = 78;
+    } else if (ratio === '1:1') {
+      if (adjustedTitleSize > 130) adjustedTitleSize = 118;
+      if (adjustedTitle2Size > 100) adjustedTitle2Size = 88;
+    } else {
+      if (adjustedTitleSize > 150) adjustedTitleSize = 125;
+      if (adjustedTitle2Size > 110) adjustedTitle2Size = 95;
+    }
+
+    const updates: Partial<ThumbnailState> = {
+      textAlignment: targetAlign,
+      titlePos: { x: 0, y: 0 },
+      title2Pos: { x: 0, y: 0 },
+      subtitlePos: { x: 0, y: 0 },
+      highlightPos: { x: 0, y: 0 },
+      titleRotation: 0,
+      titleSize: adjustedTitleSize,
+      title2Size: adjustedTitle2Size,
+    };
+
+    if (ratio === '9:16' && state.characterImage) {
+      if (state.characterScale > 75) {
+        updates.characterScale = 70;
+      }
+      updates.characterPos = { x: 0, y: 0 };
+    }
+
+    updateState(updates, true);
+
+    const alignLabel = targetAlign === 'center' ? 'Center' : targetAlign === 'right' ? 'Right' : 'Left';
+    setAutoArrangeFeedback(`Auto-arranged (${alignLabel})`);
+    setTimeout(() => setAutoArrangeFeedback(null), 2500);
+  };
+
+  const handleSelectBackground = async (bg: BackgroundItem) => {
+    // Immediate preview update
+    updateState({ background: bg.url, backgroundType: 'image', selectedBgId: bg.id });
+    // In background, fetch and inline as Base64 Data URL so mobile export includes full background
+    try {
+      const dataUrl = await urlToDataUrl(bg.url);
+      if (dataUrl && dataUrl.startsWith('data:')) {
+        updateState({ background: dataUrl, backgroundType: 'image', selectedBgId: bg.id }, false);
+      }
+    } catch (e) {
+      console.warn('Background caching failed:', e);
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'background' | 'characterImage') => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const val = event.target?.result as string;
+      try {
+        const optimizedDataUrl = await processUploadedFile(file, field === 'background' ? 1920 : 1600);
         if (field === 'background') {
-          updateState({ background: val, backgroundType: 'image' });
+          updateState({ background: optimizedDataUrl, backgroundType: 'image', selectedBgId: undefined });
         } else {
-          updateState({ characterImage: val });
+          updateState({ characterImage: optimizedDataUrl });
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.warn('Image optimization failed, falling back to FileReader:', err);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const val = event.target?.result as string;
+          if (field === 'background') {
+            updateState({ background: val, backgroundType: 'image', selectedBgId: undefined });
+          } else {
+            updateState({ characterImage: val });
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+    // Reset file input so selecting the same file triggers onChange
+    e.target.value = '';
+  };
+
+  const handleCustomFontUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validExtensions = ['ttf', 'otf', 'woff', 'woff2'];
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!ext || !validExtensions.includes(ext)) {
+      setFontUploadMessage({
+        type: 'error',
+        text: 'Font ဖိုင် အမျိုးအစား (.ttf, .otf, .woff, .woff2) သာ ထည့်သွင်းနိုင်ပါသည်'
+      });
+      setTimeout(() => setFontUploadMessage(null), 4000);
+      e.target.value = '';
+      return;
+    }
+
+    setIsFontUploading(true);
+    setFontUploadMessage(null);
+
+    try {
+      const savedRecord = await saveCustomFont(file, customFontInputName.trim() || undefined);
+      setCustomFonts(prev => [savedRecord, ...prev.filter(f => f.id !== savedRecord.id)]);
+      
+      // Immediately set as active font on the canvas so user can use it right away!
+      updateState({
+        fontFamily: savedRecord.family,
+        titleFont: savedRecord.family,
+        title2Font: savedRecord.family,
+        subtitleFont: savedRecord.family,
+        highlightFont: savedRecord.family,
+      });
+
+      setCustomFontInputName('');
+      setFontUploadMessage({
+        type: 'success',
+        text: `"${savedRecord.name}" Font ကို အောင်မြင်စွာ ထည့်သွင်းပြီး အသုံးပြုထားပါသည်!`
+      });
+      setTimeout(() => setFontUploadMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Font upload error:', err);
+      setFontUploadMessage({
+        type: 'error',
+        text: 'Font ထည့်သွင်းရာတွင် အဆင်မပြေဖြစ်သွားပါသည်: ' + (err?.message || 'Error processing font file')
+      });
+      setTimeout(() => setFontUploadMessage(null), 5000);
+    } finally {
+      setIsFontUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleApplyFontToAll = (targetFont: string) => {
+    updateState({
+      fontFamily: targetFont,
+      titleFont: targetFont,
+      title2Font: targetFont,
+      subtitleFont: targetFont,
+      highlightFont: targetFont,
+    });
+    setFontUploadMessage({
+      type: 'success',
+      text: `စာသားအားလုံး (Title, Subtitle, Highlight) ကို "${targetFont}" သို့ ပြောင်းလဲပြီးပါပြီ!`
+    });
+    setTimeout(() => setFontUploadMessage(null), 3000);
+  };
+
+  const handleDeleteCustomFont = async (id: string, family: string) => {
+    if (!confirm('ဤ Font ကို ဖျက်ရန် သေချာပါသလား?')) return;
+    try {
+      await deleteCustomFont(id);
+      setCustomFonts(prev => prev.filter(f => f.id !== id));
+      if (
+        state.fontFamily === family || 
+        state.titleFont === family || 
+        state.title2Font === family || 
+        state.subtitleFont === family || 
+        state.highlightFont === family
+      ) {
+        updateState({
+          fontFamily: 'Noto Sans Myanmar',
+          titleFont: 'Noto Sans Myanmar',
+          title2Font: 'Noto Sans Myanmar',
+          subtitleFont: 'Noto Sans Myanmar',
+          highlightFont: 'Noto Sans Myanmar',
+        });
+      }
+    } catch (err) {
+      console.error('Delete font error:', err);
     }
   };
 
@@ -540,6 +910,20 @@ export default function App() {
               <Wand2 size={13} />
               <span className="hidden sm:inline">Magic Style</span>
             </button>
+
+            {/* Install PWA App Button */}
+            {isInstallable && (
+              <button 
+                onClick={handleInstallClick}
+                className="flex items-center gap-1 sm:gap-1.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-xs font-bold hover:bg-emerald-500 hover:text-black transition-all active:scale-95"
+                title="Install App"
+              >
+                <Download size={13} />
+                <span className="hidden sm:inline">Install App</span>
+                <span className="sm:hidden">Install</span>
+              </button>
+            )}
+
             <button 
               onClick={handleExport}
               disabled={isExporting}
@@ -555,7 +939,7 @@ export default function App() {
       <main className="flex flex-col md:flex-row h-[calc(100vh-56px)] sm:h-[calc(100vh-64px)] overflow-hidden bg-[#0a0a0a]">
         {/* 1. Side Navigation (Desktop Only) */}
         <nav className="hidden md:flex flex-col w-20 bg-zinc-950 border-r border-zinc-900 z-30">
-          {(['content', 'character', 'style', 'motion', 'border', 'settings'] as const).map(tab => (
+          {(['content', 'character', 'style', 'border', 'settings'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -568,7 +952,6 @@ export default function App() {
               {tab === 'content' && <Type size={20} />}
               {tab === 'character' && <User size={20} />}
               {tab === 'style' && <Palette size={20} />}
-              {tab === 'motion' && <Film size={20} />}
               {tab === 'border' && <Square size={20} />}
               {tab === 'settings' && <SettingsIcon size={20} />}
               <span className="text-[9px] font-black uppercase tracking-widest">{tab}</span>
@@ -589,6 +972,96 @@ export default function App() {
                   </div>
 
                   <div className="space-y-6 bg-zinc-900/30 p-5 rounded-2xl border border-zinc-800/50">
+                    {/* Auto-Arrange Section */}
+                    <div className="bg-gradient-to-b from-blue-950/40 via-zinc-900/60 to-zinc-950/80 p-4 rounded-2xl border border-blue-500/30 shadow-lg space-y-3 relative overflow-hidden">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
+                            <Sparkles size={14} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <h3 className="text-xs font-black uppercase tracking-wider text-white">
+                                Auto-Arrange (အလိုအလျောက် နေရာညှိရန်)
+                              </h3>
+                            </div>
+                            <p className="text-[9px] text-zinc-400 font-medium">
+                              {state.canvasRatio === '9:16' 
+                                ? 'Shorts / TikTok (720x1280) • Center aligned' 
+                                : state.canvasRatio === '1:1' 
+                                  ? 'Square Post (1080x1080)' 
+                                  : 'YouTube Banner (1280x720)'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {autoArrangeFeedback && (
+                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded-full whitespace-nowrap animate-in fade-in">
+                            ✓ {autoArrangeFeedback}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleAutoArrange()}
+                        className="w-full py-2.5 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:via-indigo-500 hover:to-blue-400 text-white rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 active:scale-[0.98] transition-all group"
+                      >
+                        <LayoutList size={14} className="text-blue-200 group-hover:scale-110 transition-transform" />
+                        <span>Auto-Arrange Text (Title 1, 2 & Subtitle)</span>
+                      </button>
+
+                      {/* Alignment Presets */}
+                      <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80">
+                        <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
+                          Alignment:
+                        </span>
+                        <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                          <button
+                            type="button"
+                            onClick={() => handleAutoArrange('left')}
+                            title="Align Left (ဘယ်ဘက် ညီရန်)"
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded text-[9px] font-bold uppercase transition-all ${
+                              (state.textAlignment || 'left') === 'left'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                            }`}
+                          >
+                            <AlignLeft size={11} />
+                            <span>Left</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAutoArrange('center')}
+                            title="Align Center (အလယ် ညီရန်)"
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded text-[9px] font-bold uppercase transition-all ${
+                              state.textAlignment === 'center'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                            }`}
+                          >
+                            <AlignCenter size={11} />
+                            <span>Center</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAutoArrange('right')}
+                            title="Align Right (ညာဘက် ညီရန်)"
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded text-[9px] font-bold uppercase transition-all ${
+                              state.textAlignment === 'right'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                            }`}
+                          >
+                            <AlignRight size={11} />
+                            <span>Right</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-zinc-800" />
+
                     {/* Highlight Section */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
@@ -619,6 +1092,15 @@ export default function App() {
                           className="w-full accent-blue-500" 
                         />
                       </div>
+
+                      {/* Highlight Font Selector */}
+                      <FontSelector
+                        label="Highlight Font (ဟိုက်လိုက် စာသားဖောင့်)"
+                        value={state.highlightFont || state.titleFont || state.fontFamily}
+                        onChange={(f) => updateState({ highlightFont: f })}
+                        customFonts={customFonts}
+                        onOpenCustomFontUpload={() => setActiveTab('settings')}
+                      />
                     </div>
 
                     <div className="h-px bg-zinc-800" />
@@ -631,6 +1113,15 @@ export default function App() {
                         onChange={(e) => updateState({ title: e.target.value })}
                         className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-base font-bold outline-none focus:border-blue-500 transition-all min-h-[80px]"
                         placeholder="ခေါင်းစဉ် ရေးရန်..."
+                      />
+
+                      {/* Title 1 Font Selector */}
+                      <FontSelector
+                        label="Title 1 Font (ခေါင်းစဉ် ၁ စာသားဖောင့်)"
+                        value={state.titleFont || state.fontFamily}
+                        onChange={(f) => updateState({ titleFont: f, fontFamily: f })}
+                        customFonts={customFonts}
+                        onOpenCustomFontUpload={() => setActiveTab('settings')}
                       />
                       <div className="grid grid-cols-2 gap-3">
                         <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
@@ -952,6 +1443,16 @@ export default function App() {
                         className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-base font-bold outline-none focus:border-blue-500 transition-all min-h-[80px]"
                         placeholder="ဒုတိယ စာကြောင်း..."
                       />
+
+                      {/* Title 2 Font Selector */}
+                      <FontSelector
+                        label="Title 2 Font (ဒုတိယစာကြောင်း စာသားဖောင့်)"
+                        value={state.title2Font || state.titleFont || state.fontFamily}
+                        onChange={(f) => updateState({ title2Font: f })}
+                        customFonts={customFonts}
+                        onOpenCustomFontUpload={() => setActiveTab('settings')}
+                      />
+
                       <div className="grid grid-cols-2 gap-3">
                         <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
                           <label className="text-[9px] text-zinc-600 block mb-1">SIZE</label>
@@ -983,6 +1484,16 @@ export default function App() {
                         className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm outline-none focus:border-blue-500 transition-all"
                         placeholder="e.g. ဆရာတော် ဘွဲ့အမည်"
                       />
+
+                      {/* Subtitle Font Selector */}
+                      <FontSelector
+                        label="Subtitle Font (ဆရာတော်ဘွဲ့အမည်/စာတန်း ဖောင့်)"
+                        value={state.subtitleFont || state.fontFamily || state.titleFont}
+                        onChange={(f) => updateState({ subtitleFont: f })}
+                        customFonts={customFonts}
+                        onOpenCustomFontUpload={() => setActiveTab('settings')}
+                      />
+
                       {state.subtitleBgEnabled && (
                         <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800">
                           <label className="text-[9px] text-zinc-600 block mb-2">BG COLOR</label>
@@ -995,16 +1506,23 @@ export default function App() {
 
                     {/* Global Text Style */}
                     <div className="space-y-4">
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase">Font & Outline</label>
-                      <select 
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase">Global Text Style</label>
+                      </div>
+
+                      {/* Master / Global Font Selector with Apply All */}
+                      <FontSelector
+                        label="Global Font (အလုံးစုံ ဖောင့်စနစ်)"
+                        description="စာသားအားလုံး (Title 1, Title 2, Subtitle, Highlight) ကို ဤ Font အတိုင်း တပြိုင်နက်တည်း ပြောင်းလဲသတ်မှတ်နိုင်ပါသည်။"
                         value={state.fontFamily}
-                        onChange={(e) => updateState({ fontFamily: e.target.value, titleFont: e.target.value })}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm outline-none focus:border-blue-500"
-                      >
-                        {MYANMAR_FONTS.map(font => (
-                          <option key={font.name} value={font.family} style={{ fontFamily: font.family }}>{font.name}</option>
-                        ))}
-                      </select>
+                        onChange={(f) => {
+                          handleApplyFontToAll(f);
+                        }}
+                        customFonts={customFonts}
+                        showApplyAll={true}
+                        onApplyAll={() => handleApplyFontToAll(state.fontFamily)}
+                        onOpenCustomFontUpload={() => setActiveTab('settings')}
+                      />
 
                       {/* Blend Mode Dropdown */}
                       <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 space-y-2">
@@ -1709,18 +2227,47 @@ export default function App() {
                         </button>
                         <input id="bg-upload" type="file" hidden accept="image/*" onChange={(e) => handleImageUpload(e, 'background')} />
 
-                        <div className="grid grid-cols-3 gap-2">
-                          {BUILTIN_BACKGROUNDS.map((bg) => (
+                        {/* Category filter tabs */}
+                        <div className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+                          {(['All', 'Studio', 'Spiritual', 'Nature', 'Pattern'] as const).map(cat => (
                             <button
-                              key={bg.id}
-                              onClick={() => updateState({ background: bg.url, backgroundType: 'image' })}
-                              className={`aspect-video rounded-lg overflow-hidden border-2 transition-all relative group ${
-                                state.background === bg.url && state.backgroundType === 'image' ? 'border-blue-500' : 'border-transparent hover:border-zinc-700'
+                              key={cat}
+                              type="button"
+                              onClick={() => setActiveBgCategory(cat)}
+                              className={`px-2.5 py-1 rounded-lg text-[9px] font-bold whitespace-nowrap transition-all ${
+                                activeBgCategory === cat
+                                  ? 'bg-blue-600 text-white shadow-sm'
+                                  : 'bg-zinc-950 text-zinc-400 border border-zinc-800 hover:text-zinc-200 hover:bg-zinc-900'
                               }`}
                             >
-                              <img src={bg.url} alt={bg.label} className="w-full h-full object-cover" />
+                              {cat === 'Studio' ? '⚡ Studio HD' : cat}
                             </button>
                           ))}
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          {BUILTIN_BACKGROUNDS
+                            .filter(bg => activeBgCategory === 'All' || bg.category === activeBgCategory)
+                            .map((bg) => {
+                              const isSelected = state.backgroundType === 'image' && (state.selectedBgId === bg.id || state.background === bg.url);
+                              return (
+                                <button
+                                  key={bg.id}
+                                  onClick={() => handleSelectBackground(bg)}
+                                  className={`aspect-video rounded-lg overflow-hidden border-2 transition-all relative group ${
+                                    isSelected ? 'border-blue-500 ring-2 ring-blue-500/40' : 'border-transparent hover:border-zinc-700'
+                                  }`}
+                                  title={bg.label}
+                                >
+                                  <img src={bg.url} alt={bg.label} className="w-full h-full object-cover" loading="lazy" />
+                                  {bg.isOffline && (
+                                    <span className="absolute bottom-1 right-1 bg-black/85 backdrop-blur text-[7px] font-black text-amber-300 px-1 py-0.5 rounded border border-amber-500/40 shadow">
+                                      HD
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
                         </div>
                       </div>
                     )}
@@ -1763,275 +2310,6 @@ export default function App() {
                         <div className="flex items-center gap-3">
                           <label className="text-[9px] text-zinc-600 font-black w-14">OVERLAY</label>
                           <input type="range" min="0" max="100" value={state.overlayOpacity} onChange={(e) => updateState({ overlayOpacity: parseInt(e.target.value) })} className="flex-1 accent-blue-500" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              </div>
-            )}
-
-            {activeTab === 'motion' && (
-              <div className="space-y-6 animate-in">
-                <section className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-zinc-500">
-                      <Film size={14} />
-                      <h2 className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Title Motion & Entry Animations</h2>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => updateState({ animationPlayKey: (state.animationPlayKey || 0) + 1 }, false)}
-                      className="flex items-center gap-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all border border-blue-500/30 active:scale-95"
-                      title="Replay CSS Animation"
-                    >
-                      <RotateCcw size={12} />
-                      <span>Replay</span>
-                    </button>
-                  </div>
-
-                  <div className="space-y-6 bg-zinc-900/30 p-5 rounded-2xl border border-zinc-800/50">
-                    {/* Live Play Action Card */}
-                    <div className="bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-purple-900/40 p-4 rounded-xl border border-blue-500/30 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-black text-white flex items-center gap-1.5">
-                            <Sparkles size={14} className="text-yellow-400" />
-                            <span>Live Animation Preview</span>
-                          </p>
-                          <p className="text-[10px] text-zinc-400 mt-0.5">
-                            Active: <span className="text-blue-400 font-bold uppercase">{state.titleAnimation || 'none'}</span>
-                            {state.titleAnimation !== 'none' && ` • ${state.animationDuration || 0.8}s`}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => updateState({ animationPlayKey: (state.animationPlayKey || 0) + 1 }, false)}
-                          className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-blue-600/30 active:scale-95 transition-all"
-                        >
-                          <Play size={12} className="fill-white" />
-                          <span>Play</span>
-                        </button>
-                      </div>
-
-                      {/* Quick animation presets chips */}
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => updateState({ 
-                            titleAnimation: 'popBounce', 
-                            animationDuration: 0.6, 
-                            animationIteration: 'once',
-                            animationPlayKey: (state.animationPlayKey || 0) + 1 
-                          })}
-                          className="text-[9px] bg-zinc-950/70 hover:bg-blue-600/30 text-zinc-300 hover:text-white px-2 py-1 rounded-md border border-zinc-800 font-medium transition-all"
-                        >
-                          ⚡ Punchy Pop
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => updateState({ 
-                            titleAnimation: 'slideUp', 
-                            animationDuration: 1.0, 
-                            animationIteration: 'once',
-                            animationPlayKey: (state.animationPlayKey || 0) + 1 
-                          })}
-                          className="text-[9px] bg-zinc-950/70 hover:bg-blue-600/30 text-zinc-300 hover:text-white px-2 py-1 rounded-md border border-zinc-800 font-medium transition-all"
-                        >
-                          🎬 Cinematic Slide
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => updateState({ 
-                            titleAnimation: 'float', 
-                            animationDuration: 2.2, 
-                            animationIteration: 'infinite',
-                            animationPlayKey: (state.animationPlayKey || 0) + 1 
-                          })}
-                          className="text-[9px] bg-zinc-950/70 hover:bg-blue-600/30 text-zinc-300 hover:text-white px-2 py-1 rounded-md border border-zinc-800 font-medium transition-all"
-                        >
-                          ☁️ Smooth Float
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => updateState({ 
-                            titleAnimation: 'pulseGlow', 
-                            animationDuration: 1.6, 
-                            animationIteration: 'infinite',
-                            animationPlayKey: (state.animationPlayKey || 0) + 1 
-                          })}
-                          className="text-[9px] bg-zinc-950/70 hover:bg-blue-600/30 text-zinc-300 hover:text-white px-2 py-1 rounded-md border border-zinc-800 font-medium transition-all"
-                        >
-                          ✨ Neon Glow
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Entry Animations Grid */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase">Select Animation Style (စတိုင်ရွေးရန်)</label>
-                        <span className="text-[10px] text-zinc-500 font-mono">11 Presets</span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        {[
-                          { id: 'none', label: 'None', burmese: 'မသုံးပါ (Static)', icon: Slash },
-                          { id: 'fadeIn', label: 'Fade In', burmese: 'မှိန်ရာမှ ပေါ်လာခြင်း', icon: Eye },
-                          { id: 'slideUp', label: 'Slide Up', burmese: 'အောက်မှ တက်လာခြင်း', icon: ArrowUp },
-                          { id: 'slideDown', label: 'Slide Down', burmese: 'အထက်မှ ဆင်းလာခြင်း', icon: ArrowDown },
-                          { id: 'slideLeft', label: 'Slide In Left', burmese: 'ညာမှ ဘယ်သို့ ဝင်လာခြင်း', icon: ArrowLeft },
-                          { id: 'slideRight', label: 'Slide In Right', burmese: 'ဘယ်မှ ညာသို့ ဝင်လာခြင်း', icon: ArrowRight },
-                          { id: 'scale', label: 'Scale / Zoom', burmese: 'ချဲ့၍ ပေါ်လာခြင်း', icon: Maximize2 },
-                          { id: 'popBounce', label: 'Pop & Bounce', burmese: 'ခုန်ပျံ၍ ဝင်လာခြင်း', icon: Sparkles },
-                          { id: 'flipIn', label: '3D Flip In', burmese: '၃ ဘက်မြင် လှည့်ပတ်ခြင်း', icon: RotateCw },
-                          { id: 'pulseGlow', label: 'Pulse & Glow', burmese: 'တောက်ပ လှုပ်ရှားခြင်း', icon: Zap },
-                          { id: 'float', label: 'Gentle Float', burmese: 'ဝဲပျံ လှုပ်ရှားနေခြင်း', icon: Activity },
-                        ].map((item) => {
-                          const isSelected = (state.titleAnimation || 'none') === item.id;
-                          const IconComp = item.icon;
-                          return (
-                            <button
-                              key={item.id}
-                              type="button"
-                              onClick={() => {
-                                updateState({
-                                  titleAnimation: item.id as any,
-                                  animationPlayKey: (state.animationPlayKey || 0) + 1,
-                                });
-                              }}
-                              className={`p-3 rounded-xl border text-left flex flex-col gap-1.5 transition-all relative ${
-                                isSelected
-                                  ? 'bg-blue-600/15 border-blue-500 text-white shadow-lg shadow-blue-500/10'
-                                  : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                                  isSelected ? 'bg-blue-500 text-white' : 'bg-zinc-900 text-zinc-400'
-                                }`}>
-                                  <IconComp size={14} />
-                                </div>
-                                {isSelected && (
-                                  <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                                )}
-                              </div>
-                              <span className="text-xs font-bold text-zinc-100">{item.label}</span>
-                              <span className="text-[9px] text-zinc-500 leading-tight">{item.burmese}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="h-px bg-zinc-800" />
-
-                    {/* Target Elements Selection */}
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase">Apply Animation To (သက်ရောက်မည့် စာသား)</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          { id: 'both', label: 'All Titles' },
-                          { id: 'title1', label: 'Title 1 Only' },
-                          { id: 'title2', label: 'Title 2 Only' },
-                        ].map(target => (
-                          <button
-                            key={target.id}
-                            type="button"
-                            onClick={() => updateState({ 
-                              animationTarget: target.id as any,
-                              animationPlayKey: (state.animationPlayKey || 0) + 1 
-                            })}
-                            className={`py-2 px-2 rounded-lg text-[10px] font-bold border transition-all ${
-                              (state.animationTarget || 'both') === target.id
-                                ? 'bg-blue-600 text-white border-blue-400'
-                                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            {target.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Motion Settings Sliders */}
-                    <div className="space-y-4">
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase">Animation Timing (အချိန်ချိန်ညှိမှုများ)</label>
-                      
-                      <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-4">
-                        {/* Duration */}
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Duration (ကြာချိန်)</span>
-                            <span className="text-[10px] text-blue-400 font-mono font-bold">{state.animationDuration || 0.8}s</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0.2"
-                            max="3.0"
-                            step="0.1"
-                            value={state.animationDuration || 0.8}
-                            onChange={(e) => updateState({ 
-                              animationDuration: parseFloat(e.target.value),
-                              animationPlayKey: (state.animationPlayKey || 0) + 1 
-                            })}
-                            className="w-full accent-blue-500"
-                          />
-                        </div>
-
-                        {/* Delay */}
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Start Delay (နှောင့်နှေးချိန်)</span>
-                            <span className="text-[10px] text-blue-400 font-mono font-bold">{state.animationDelay || 0}s</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0.0"
-                            max="2.0"
-                            step="0.05"
-                            value={state.animationDelay || 0}
-                            onChange={(e) => updateState({ 
-                              animationDelay: parseFloat(e.target.value),
-                              animationPlayKey: (state.animationPlayKey || 0) + 1 
-                            })}
-                            className="w-full accent-blue-500"
-                          />
-                        </div>
-
-                        {/* Iteration Mode */}
-                        <div className="pt-2 border-t border-zinc-900 space-y-2">
-                          <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Repeat Mode (လှုပ်ရှားမှု ပုံစံ)</span>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => updateState({ 
-                                animationIteration: 'once',
-                                animationPlayKey: (state.animationPlayKey || 0) + 1 
-                              })}
-                              className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${
-                                (state.animationIteration || 'once') === 'once'
-                                  ? 'bg-blue-600 text-white border-blue-400'
-                                  : 'bg-zinc-900 border-zinc-800 text-zinc-400'
-                              }`}
-                            >
-                              Play Once (၁ ကြိမ်)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => updateState({ 
-                                animationIteration: 'infinite',
-                                animationPlayKey: (state.animationPlayKey || 0) + 1 
-                              })}
-                              className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${
-                                state.animationIteration === 'infinite'
-                                  ? 'bg-blue-600 text-white border-blue-400'
-                                  : 'bg-zinc-900 border-zinc-800 text-zinc-400'
-                              }`}
-                            >
-                              Loop Forever (အမြဲ)
-                            </button>
-                          </div>
                         </div>
                       </div>
                     </div>
@@ -2113,6 +2391,15 @@ export default function App() {
                           </button>
                         ))}
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleAutoArrange()}
+                        className="w-full py-2 px-3 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 hover:text-white border border-blue-500/30 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm"
+                      >
+                        <Sparkles size={12} className="text-blue-400" />
+                        <span>Auto-Arrange Text for Current Ratio</span>
+                      </button>
                     </div>
 
                     <div className="h-px bg-zinc-800" />
@@ -2127,6 +2414,190 @@ export default function App() {
                     >
                       Reset Project
                     </button>
+                  </div>
+                </section>
+
+                {/* Custom Fonts Section */}
+                <section className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-zinc-500">
+                      <FileType size={14} className="text-blue-400" />
+                      <h2 className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                        Custom Fonts (ကိုယ်ပိုင် Font ထည့်သွင်းခြင်း)
+                      </h2>
+                    </div>
+                    {customFonts.length > 0 && (
+                      <span className="text-[9px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                        {customFonts.length} Fonts
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="bg-zinc-900/30 p-5 rounded-2xl border border-zinc-800/50 space-y-5">
+                    <div>
+                      <p className="text-xs text-zinc-300 font-medium leading-relaxed">
+                        သင်အသုံးပြုလိုသော ကိုယ်ပိုင် မြန်မာ သို့မဟုတ် အင်္ဂလိပ် Font ဖိုင် (.ttf, .otf, .woff, .woff2) များကို Upload ပြုလုပ်ပြီး Title 1, Title 2, Subtitle နှင့် Highlight တို့တွင် စိတ်ကြိုက် ရွေးချယ်အသုံးပြုနိုင်ပါသည်။
+                      </p>
+                    </div>
+
+                    {/* Hidden file input */}
+                    <input 
+                      type="file" 
+                      ref={fontFileInputRef}
+                      accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2" 
+                      onChange={handleCustomFontUpload}
+                      className="hidden" 
+                    />
+
+                    {/* Font Upload Box */}
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase block mb-1.5">
+                          Font Name / အမည် (Optional)
+                        </label>
+                        <input 
+                          type="text"
+                          value={customFontInputName}
+                          onChange={(e) => setCustomFontInputName(e.target.value)}
+                          placeholder="Font အမည် ရေးနိုင်သည် (မရေးပါက မူရင်းဖိုင်အမည် အသုံးပြုမည်)"
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs outline-none focus:border-blue-500 transition-all text-zinc-200"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => fontFileInputRef.current?.click()}
+                        disabled={isFontUploading}
+                        className="w-full border-2 border-dashed border-zinc-700/80 hover:border-blue-500 bg-zinc-950/60 hover:bg-blue-950/20 p-5 rounded-2xl flex flex-col items-center justify-center gap-2 group transition-all text-center cursor-pointer disabled:opacity-50"
+                      >
+                        {isFontUploading ? (
+                          <>
+                            <Loader2 className="animate-spin text-blue-400" size={26} />
+                            <span className="text-xs font-bold text-blue-300">
+                              Font ဖိုင်အား ဖတ်ရှုပြီး တပ်ဆင်နေပါသည်...
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-110 group-hover:bg-blue-500/20 transition-all shadow-md">
+                              <Upload size={18} />
+                            </div>
+                            <div className="space-y-0.5">
+                              <span className="text-xs font-bold text-zinc-200 block group-hover:text-blue-400 transition-colors">
+                                Font ဖိုင် ရွေးချယ်ရန် နှိပ်ပါ
+                              </span>
+                              <span className="text-[10px] text-zinc-500 block">
+                                .TTF, .OTF, .WOFF, .WOFF2 ဖိုင်များ ထည့်သွင်းနိုင်ပါသည်
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Feedback Alert */}
+                    {fontUploadMessage && (
+                      <div className={`p-3 rounded-xl flex items-center gap-2.5 text-xs font-bold animate-in fade-in ${
+                        fontUploadMessage.type === 'success' 
+                          ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/30' 
+                          : 'bg-red-950/60 text-red-300 border border-red-500/30'
+                      }`}>
+                        {fontUploadMessage.type === 'success' ? (
+                          <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                        ) : (
+                          <AlertCircle size={16} className="text-red-400 shrink-0" />
+                        )}
+                        <span>{fontUploadMessage.text}</span>
+                      </div>
+                    )}
+
+                    <div className="h-px bg-zinc-800" />
+
+                    {/* Installed Custom Fonts List */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase">
+                          ထည့်သွင်းထားသော Font များ ({customFonts.length})
+                        </label>
+                      </div>
+
+                      {customFonts.length === 0 ? (
+                        <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80 text-center space-y-1">
+                          <FileType size={20} className="text-zinc-600 mx-auto mb-1" />
+                          <p className="text-xs text-zinc-400 font-bold">ကိုယ်ပိုင် Font မရှိသေးပါ</p>
+                          <p className="text-[10px] text-zinc-600">
+                            အထက်ပါ Upload ခလုတ်မှတစ်ဆင့် သင်နှစ်သက်ရာ Font ဖိုင် (.ttf သို့မဟုတ် .otf) ကို ထည့်သွင်းနိုင်ပါသည်
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {customFonts.map((font) => {
+                            const isCurrentFont = state.fontFamily === font.family || state.titleFont === font.family;
+                            return (
+                              <div 
+                                key={font.id} 
+                                className={`p-3.5 rounded-xl border transition-all space-y-2.5 ${
+                                  isCurrentFont 
+                                    ? 'bg-blue-950/30 border-blue-500/40 shadow-sm shadow-blue-500/10' 
+                                    : 'bg-zinc-950/80 border-zinc-800/80 hover:border-zinc-700'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className="w-6 h-6 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
+                                      <FileType size={12} />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <h4 className="text-xs font-bold text-zinc-100 truncate flex items-center gap-1.5">
+                                        <span>{font.name}</span>
+                                        {isCurrentFont && (
+                                          <span className="text-[8px] bg-blue-600 text-white font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                                            Active
+                                          </span>
+                                        )}
+                                      </h4>
+                                      <span className="text-[9px] text-zinc-500 truncate block">
+                                        {font.fileName} ({font.format})
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleApplyFontToAll(font.family)}
+                                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${
+                                        isCurrentFont
+                                          ? 'bg-blue-600 text-white'
+                                          : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white'
+                                      }`}
+                                    >
+                                      {isCurrentFont ? '✓ In Use (All)' : 'Apply to All'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteCustomFont(font.id, font.family)}
+                                      className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                      title="Delete font (ဖျက်မည်)"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Live Preview rendered IN this custom font */}
+                                <div 
+                                  style={{ fontFamily: font.family }} 
+                                  className="text-base sm:text-lg font-bold text-white bg-zinc-900/90 px-3 py-2 rounded-lg border border-zinc-800/80 truncate tracking-wide"
+                                >
+                                  မြန်မာစာ နမူနာ ၁၂၃ ABC
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </section>
               </div>
@@ -2175,7 +2646,7 @@ export default function App() {
 
         {/* 4. Mobile Bottom Nav */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#050505]/95 backdrop-blur-xl border-t border-zinc-900 flex items-center justify-around z-50 px-2">
-          {(['content', 'character', 'style', 'motion', 'border', 'settings'] as const).map(tab => (
+          {(['content', 'character', 'style', 'border', 'settings'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -2186,7 +2657,6 @@ export default function App() {
               {tab === 'content' && <Type size={18} />}
               {tab === 'character' && <User size={18} />}
               {tab === 'style' && <Palette size={18} />}
-              {tab === 'motion' && <Film size={18} />}
               {tab === 'border' && <Square size={18} />}
               {tab === 'settings' && <SettingsIcon size={18} />}
               <span className="text-[8px] font-bold uppercase tracking-tighter">{tab}</span>
@@ -2293,6 +2763,10 @@ export default function App() {
           </button>
         </div>
       )}
+
+
+
+
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
