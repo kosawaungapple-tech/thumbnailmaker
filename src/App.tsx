@@ -26,7 +26,26 @@ import {
   Redo2,
   Settings as SettingsIcon,
   User,
-  RotateCw
+  RotateCw,
+  Move,
+  Share2,
+  Copy,
+  Check,
+  Smartphone,
+  X,
+  AlertCircle,
+  Film,
+  Play,
+  RotateCcw,
+  Zap,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  Maximize2,
+  Activity,
+  Eye,
+  Slash
 } from 'lucide-react';
 
 const MYANMAR_FONTS: FontConfig[] = [
@@ -72,6 +91,11 @@ const INITIAL_STATE: ThumbnailState = {
   textOutlineWidth: 0,
   textOutlineColor: '#000000',
   textShadow: 4,
+  textShadowBlur: 8,
+  titleGradientEnabled: false,
+  titleGradientStart: '#ff007a',
+  titleGradientEnd: '#7928ca',
+  titleGradientDirection: 'to right',
   fontFamily: 'Noto Sans Myanmar',
   titleColor: '#ffffff',
   subtitleColor: '#ffffff',
@@ -83,12 +107,23 @@ const INITIAL_STATE: ThumbnailState = {
   theme: 'modern',
   overlayOpacity: 20,
   lineHeight: 1.35,
+  letterSpacing: 0,
   titleSize: 110,
   title2Size: 110,
   titleFont: 'Noto Sans Myanmar',
   titleRotation: 0,
+  titleBlendMode: 'normal',
   titleBorderWidth: 0,
-  titleBorderColor: '#000000',
+  titleBorderColor: '#ffffff',
+  titleBorderRadius: 16,
+  titleBorderBg: 'transparent',
+  // Motion / Animation
+  titleAnimation: 'none',
+  animationDuration: 0.8,
+  animationDelay: 0,
+  animationIteration: 'once',
+  animationTarget: 'both',
+  animationPlayKey: 0,
   titlePos: { x: 0, y: 0 },
   title2Pos: { x: 0, y: 0 },
   subtitlePos: { x: 0, y: 0 },
@@ -105,8 +140,19 @@ export default function App() {
   const [future, setFuture] = useState<ThumbnailState[]>([]);
   const [isExporting, setIsExporting] = useState(false);
   const [isRemovingBg, setIsRemovingBg] = useState(false);
-  const [activeTab, setActiveTab] = useState<'content' | 'character' | 'style' | 'border' | 'settings'>('content');
+  const [activeTab, setActiveTab] = useState<'content' | 'character' | 'style' | 'motion' | 'border' | 'settings'>('content');
   const previewRef = useRef<HTMLDivElement>(null);
+
+  // iPhone / Safari & General Export Modal States
+  const [exportedImage, setExportedImage] = useState<{
+    dataUrl: string;
+    blobUrl: string;
+    file: File;
+    blob: Blob;
+  } | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const undo = () => {
     if (history.length === 0) return;
@@ -148,18 +194,103 @@ export default function App() {
   const handleExport = async () => {
     if (!previewRef.current) return;
     setIsExporting(true);
+    setExportError(null);
+
+    const isIOS = typeof navigator !== 'undefined' && (
+      /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    );
+
     try {
-      const dataUrl = await toPng(previewRef.current, {
-        cacheBust: true,
-        width: 1280,
-        height: 720,
-        pixelRatio: 2,
-        backgroundColor: '#000000',
+      const dims = state.canvasRatio === '9:16'
+        ? { width: 720, height: 1280 }
+        : state.canvasRatio === '1:1'
+        ? { width: 1080, height: 1080 }
+        : { width: 1280, height: 720 };
+
+      const filterFn = (node: Node) => {
+        if (node instanceof HTMLElement && node.getAttribute('data-export-ignore') === 'true') {
+          return false;
+        }
+        return true;
+      };
+
+      // On iOS Safari, excessive canvas dimensions/pixelRatio can trigger WebKit canvas memory errors
+      const exportPixelRatio = isIOS ? 1.5 : 2;
+
+      let dataUrl: string;
+      try {
+        dataUrl = await toPng(previewRef.current, {
+          cacheBust: true,
+          width: dims.width,
+          height: dims.height,
+          pixelRatio: exportPixelRatio,
+          backgroundColor: '#000000',
+          filter: filterFn,
+        });
+      } catch (firstErr) {
+        console.warn('Standard export failed, retrying with skipFonts: true and safe options...', firstErr);
+        dataUrl = await toPng(previewRef.current, {
+          cacheBust: false,
+          width: dims.width,
+          height: dims.height,
+          pixelRatio: exportPixelRatio,
+          backgroundColor: '#000000',
+          skipFonts: true,
+          filter: filterFn,
+        });
+      }
+
+      // Convert base64 dataUrl into Blob & File for iOS Web Share & standard download
+      const base64Parts = dataUrl.split(',');
+      const byteString = atob(base64Parts[1]);
+      const mimeString = base64Parts[0].split(':')[1].split(';')[0];
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: mimeString });
+      const filename = `thumbnail-${Date.now()}.png`;
+      const file = new File([blob], filename, { type: 'image/png' });
+      const blobUrl = URL.createObjectURL(blob);
+
+      setExportedImage({
+        dataUrl,
+        blobUrl,
+        file,
+        blob,
       });
-      const link = document.createElement('a');
-      link.download = `thumbnail-${Date.now()}.png`;
-      link.href = dataUrl;
-      link.click();
+
+      // Open Save/Export Modal
+      setShowExportModal(true);
+
+      // On non-iOS devices, also trigger automatic direct download
+      if (!isIOS) {
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = blobUrl;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          if (link.parentNode) {
+            document.body.removeChild(link);
+          }
+        }, 300);
+      } else {
+        // On iOS: Try Web Share immediately if user agent permits
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'YouTube Thumbnail',
+            });
+          } catch {
+            // If iOS Safari dismissed or timed out gesture window,
+            // the user is presented with the Save Modal with 1-tap "Save to Photos" button and touch-and-hold guide!
+          }
+        }
+      }
       
       confetti({
         particleCount: 150,
@@ -169,8 +300,71 @@ export default function App() {
       });
     } catch (err) {
       console.error('Export failed', err);
+      setExportError('ပုံထုတ်ယူရာတွင် အမှားဖြစ်သွားပါသည်။ ကျေးဇူးပြု၍ ထပ်မံကြိုးစားကြည့်ပါ။');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleShareToPhotos = async () => {
+    if (!exportedImage) return;
+    if (navigator.canShare && navigator.canShare({ files: [exportedImage.file] })) {
+      try {
+        await navigator.share({
+          files: [exportedImage.file],
+          title: 'YouTube Thumbnail',
+        });
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Share failed', err);
+        }
+      }
+    } else if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'YouTube Thumbnail',
+          url: exportedImage.blobUrl,
+        });
+      } catch (err) {
+        console.error('Share URL failed', err);
+      }
+    } else {
+      handleDirectDownload();
+    }
+  };
+
+  const handleDirectDownload = () => {
+    if (!exportedImage) return;
+    const link = document.createElement('a');
+    link.download = exportedImage.file.name;
+    link.href = exportedImage.blobUrl;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      if (link.parentNode) {
+        document.body.removeChild(link);
+      }
+    }, 300);
+  };
+
+  const handleCopyImage = async () => {
+    if (!exportedImage) return;
+    try {
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'image/png': exportedImage.blob,
+          }),
+        ]);
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2500);
+      } else {
+        // Fallback to copying blob URL or downloading
+        handleDirectDownload();
+      }
+    } catch (err) {
+      console.error('Clipboard copy failed', err);
     }
   };
 
@@ -268,16 +462,23 @@ export default function App() {
     }
   };
 
-  const updateState = (updates: Partial<ThumbnailState>) => {
-    setHistory(prev => [...prev, state].slice(-50));
-    setFuture([]);
+  const updateState = (updates: Partial<ThumbnailState>, saveHistory = true) => {
+    if (saveHistory) {
+      setHistory(prev => [...prev, state].slice(-50));
+      setFuture([]);
+    }
     setState(prev => ({ ...prev, ...updates }));
   };
 
   const updateNestedState = <K extends keyof ThumbnailState>(
     key: K,
-    updates: Partial<ThumbnailState[K]>
+    updates: Partial<ThumbnailState[K]>,
+    saveHistory = true
   ) => {
+    if (saveHistory) {
+      setHistory(prev => [...prev, state].slice(-50));
+      setFuture([]);
+    }
     setState(prev => ({
       ...prev,
       [key]: { ...(prev[key] as object), ...updates }
@@ -354,7 +555,7 @@ export default function App() {
       <main className="flex flex-col md:flex-row h-[calc(100vh-56px)] sm:h-[calc(100vh-64px)] overflow-hidden bg-[#0a0a0a]">
         {/* 1. Side Navigation (Desktop Only) */}
         <nav className="hidden md:flex flex-col w-20 bg-zinc-950 border-r border-zinc-900 z-30">
-          {(['content', 'character', 'style', 'border', 'settings'] as const).map(tab => (
+          {(['content', 'character', 'style', 'motion', 'border', 'settings'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -367,6 +568,7 @@ export default function App() {
               {tab === 'content' && <Type size={20} />}
               {tab === 'character' && <User size={20} />}
               {tab === 'style' && <Palette size={20} />}
+              {tab === 'motion' && <Film size={20} />}
               {tab === 'border' && <Square size={20} />}
               {tab === 'settings' && <SettingsIcon size={20} />}
               <span className="text-[9px] font-black uppercase tracking-widest">{tab}</span>
@@ -436,7 +638,14 @@ export default function App() {
                           <input type="range" min="40" max="250" value={state.titleSize} onChange={(e) => updateState({ titleSize: parseInt(e.target.value) })} className="w-full accent-blue-500" />
                         </div>
                         <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
-                          <label className="text-[9px] text-zinc-600 block mb-1">COLOR</label>
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">COLOR</label>
+                            {state.titleGradientEnabled && (
+                              <span className="text-[8px] bg-gradient-to-r from-pink-500 to-purple-500 text-white px-1.5 py-0.5 rounded font-black uppercase">
+                                Gradient
+                              </span>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2">
                             <input type="color" value={state.titleColor} onChange={(e) => updateState({ titleColor: e.target.value })} className="w-full h-6 rounded border-0 cursor-pointer" />
                           </div>
@@ -608,6 +817,129 @@ export default function App() {
                             })}
                           </div>
                         </div>
+
+                        {/* Corner Radius (Sharp / Rounded / Pill-shaped) */}
+                        <div className="pt-2.5 border-t border-zinc-900/80 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-3.5 h-3.5 border border-blue-400/80 rounded flex items-center justify-center">
+                                <div className="w-1.5 h-1.5 bg-blue-400 rounded-sm" />
+                              </div>
+                              <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider">
+                                Corner Radius (ဒေါင့်စွန်း)
+                              </label>
+                            </div>
+                            <span className="text-[10px] font-mono font-bold text-blue-400">
+                              {(state.titleBorderRadius ?? 0) === 0 
+                                ? 'Sharp (0px)' 
+                                : (state.titleBorderRadius ?? 0) >= 50 
+                                  ? 'Pill-shaped' 
+                                  : `Rounded (${state.titleBorderRadius ?? 16}px)`}
+                            </span>
+                          </div>
+
+                          {/* Corner Radius Slider */}
+                          <div className="bg-zinc-900/60 p-2.5 rounded-lg border border-zinc-800/80 space-y-1.5">
+                            <div className="flex justify-between text-[8px] text-zinc-400">
+                              <span className="font-bold">SHARP (0px)</span>
+                              <span className="font-bold">ROUNDED (16px)</span>
+                              <span className="font-bold">PILL (FULL)</span>
+                            </div>
+                            <input 
+                              type="range" 
+                              min="0" 
+                              max="50" 
+                              step="1"
+                              value={state.titleBorderRadius ?? 16} 
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                updateState({ 
+                                  titleBorderRadius: val,
+                                  ...((state.titleBorderWidth || 0) === 0 ? { titleBorderWidth: 4 } : {})
+                                });
+                              }} 
+                              className="w-full accent-blue-500" 
+                            />
+                          </div>
+
+                          {/* Corner Shape Quick Presets (Sharp, Rounded, Pill) */}
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {[
+                              { label: 'Sharp', val: 0, iconShape: 'rounded-none' },
+                              { label: 'Rounded', val: 16, iconShape: 'rounded-sm' },
+                              { label: 'Pill', val: 50, iconShape: 'rounded-full' }
+                            ].map(shape => {
+                              const currentR = state.titleBorderRadius ?? 0;
+                              const isSelected = shape.val === 0 
+                                ? currentR === 0 
+                                : shape.val === 50 
+                                  ? currentR >= 50 
+                                  : (currentR > 0 && currentR < 50);
+                              return (
+                                <button
+                                  key={shape.label}
+                                  type="button"
+                                  onClick={() => {
+                                    updateState({ 
+                                      titleBorderRadius: shape.val,
+                                      ...((state.titleBorderWidth || 0) === 0 ? { titleBorderWidth: 4 } : {})
+                                    });
+                                  }}
+                                  className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border text-[9px] font-black uppercase transition-all ${
+                                    isSelected 
+                                      ? 'bg-blue-600/20 border-blue-500 text-white shadow-sm shadow-blue-500/10' 
+                                      : 'bg-zinc-900/80 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                                  }`}
+                                >
+                                  <div className={`w-3 h-3 border border-current ${shape.iconShape}`} />
+                                  <span>{shape.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Background Fill (Optional) */}
+                        <div className="pt-2 border-t border-zinc-900/80 flex items-center justify-between">
+                          <span className="text-[8px] text-zinc-400 font-bold uppercase">Background:</span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => updateState({ titleBorderBg: 'transparent' })}
+                              className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase transition-all ${
+                                (!state.titleBorderBg || state.titleBorderBg === 'transparent') 
+                                  ? 'bg-zinc-700 text-white' 
+                                  : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
+                              }`}
+                            >
+                              None
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateState({ 
+                                titleBorderBg: 'rgba(0,0,0,0.7)',
+                                ...((state.titleBorderWidth || 0) === 0 ? { titleBorderWidth: 4 } : {})
+                              })}
+                              className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase transition-all ${
+                                state.titleBorderBg === 'rgba(0,0,0,0.7)' 
+                                  ? 'bg-blue-600 text-white' 
+                                  : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
+                              }`}
+                            >
+                              Dark
+                            </button>
+                            <input 
+                              type="color" 
+                              value={state.titleBorderBg && state.titleBorderBg !== 'transparent' && !state.titleBorderBg.startsWith('rgba') ? state.titleBorderBg : '#000000'}
+                              onChange={(e) => updateState({ 
+                                titleBorderBg: e.target.value,
+                                ...((state.titleBorderWidth || 0) === 0 ? { titleBorderWidth: 4 } : {})
+                              })}
+                              title="Custom Fill Color"
+                              className="w-5 h-5 rounded border border-zinc-700 cursor-pointer bg-transparent"
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -673,15 +1005,454 @@ export default function App() {
                           <option key={font.name} value={font.family} style={{ fontFamily: font.family }}>{font.name}</option>
                         ))}
                       </select>
+
+                      {/* Blend Mode Dropdown */}
+                      <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                            <Layers size={11} className="text-blue-400" />
+                            Blend Mode (CSS mix-blend-mode ရောစပ်မှုပုံစံ)
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] text-blue-400 font-mono font-bold uppercase">
+                              {state.titleBlendMode || 'normal'}
+                            </span>
+                            {(state.titleBlendMode && state.titleBlendMode !== 'normal') && (
+                              <button
+                                type="button"
+                                onClick={() => updateState({ titleBlendMode: 'normal' })}
+                                className="text-[9px] text-zinc-500 hover:text-zinc-300 uppercase underline"
+                              >
+                                Reset
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <select
+                          value={state.titleBlendMode || 'normal'}
+                          onChange={(e) => updateState({ titleBlendMode: e.target.value as any })}
+                          className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg p-2.5 text-xs font-bold text-zinc-200 outline-none focus:border-blue-500 transition-all cursor-pointer"
+                        >
+                          <optgroup label="Standard (ပုံမှန်)">
+                            <option value="normal">Normal (Default / မူလအတိုင်း)</option>
+                          </optgroup>
+                          <optgroup label="Darken & Contrast (အမှောင်ဘက်သမ်း)">
+                            <option value="multiply">Multiply (အရောင်ထပ်စပ်)</option>
+                            <option value="darken">Darken (မှောင်စေရန်)</option>
+                            <option value="color-burn">Color Burn (ရင့်မှောင်)</option>
+                          </optgroup>
+                          <optgroup label="Lighten & Glow (အလင်းဘက်သမ်း)">
+                            <option value="screen">Screen (အလင်းဖောက် / ပုံပေါ်ထင်)</option>
+                            <option value="lighten">Lighten (လင်းစေရန်)</option>
+                            <option value="color-dodge">Color Dodge (တောက်ပအလင်း)</option>
+                          </optgroup>
+                          <optgroup label="Overlay & Creative (ကွန်ထရက် မြင့်မား)">
+                            <option value="overlay">Overlay (အလွှာထပ်)</option>
+                            <option value="soft-light">Soft Light (အလင်းနု)</option>
+                            <option value="hard-light">Hard Light (အလင်းပြင်း)</option>
+                          </optgroup>
+                          <optgroup label="Inversion & Special (အထူးဖန်တီးမှု)">
+                            <option value="difference">Difference (အရောင်ပြောင်းပြန် / ဆန့်ကျင်ဘက်)</option>
+                            <option value="exclusion">Exclusion (အရောင်ဖယ်ထုတ်)</option>
+                            <option value="luminosity">Luminosity (အလင်းအမှောင်သီးသန့်)</option>
+                          </optgroup>
+                        </select>
+
+                        {/* Quick Presets for Popular Blend Modes */}
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {[
+                            { label: 'Normal', val: 'normal' },
+                            { label: 'Multiply', val: 'multiply' },
+                            { label: 'Screen', val: 'screen' },
+                            { label: 'Overlay', val: 'overlay' },
+                            { label: 'Color Dodge', val: 'color-dodge' },
+                            { label: 'Difference', val: 'difference' },
+                          ].map(preset => {
+                            const isSelected = (state.titleBlendMode || 'normal') === preset.val;
+                            return (
+                              <button
+                                key={preset.label}
+                                type="button"
+                                onClick={() => updateState({ titleBlendMode: preset.val as any })}
+                                className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase transition-all ${
+                                  isSelected 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                                }`}
+                              >
+                                {preset.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
-                          <label className="text-[9px] text-zinc-600 block mb-1">OUTLINE</label>
+                        <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800">
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">OUTLINE</label>
+                            <span className="text-[9px] text-blue-400 font-mono font-bold">{state.textOutlineWidth}px</span>
+                          </div>
                           <input type="range" min="0" max="10" value={state.textOutlineWidth} onChange={(e) => updateState({ textOutlineWidth: parseInt(e.target.value) })} className="w-full accent-blue-500" />
                         </div>
-                        <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
-                          <label className="text-[9px] text-zinc-600 block mb-1">SHADOW</label>
-                          <input type="range" min="0" max="20" value={state.textShadow} onChange={(e) => updateState({ textShadow: parseInt(e.target.value) })} className="w-full accent-blue-500" />
+                        <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800">
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">SHADOW OFFSET</label>
+                            <span className="text-[9px] text-blue-400 font-mono font-bold">{state.textShadow}px</span>
+                          </div>
+                          <input type="range" min="0" max="25" value={state.textShadow} onChange={(e) => updateState({ textShadow: parseInt(e.target.value) })} className="w-full accent-blue-500" />
                         </div>
+                      </div>
+
+                      {/* Shadow Blur Slider (Soft to Sharp Drop Shadow) */}
+                      <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-1.5">
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
+                              Shadow Blur (အရိပ် မှုန်ဝါးမှု)
+                            </label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-blue-400 font-mono font-bold">
+                              {(state.textShadowBlur ?? (state.textShadow * 2))}px
+                            </span>
+                            <span className="text-[9px] text-zinc-500">
+                              {(state.textShadowBlur ?? (state.textShadow * 2)) === 0 
+                                ? '(Sharp / ပြတ်သား)' 
+                                : (state.textShadowBlur ?? (state.textShadow * 2)) >= 20 
+                                  ? '(Extra Soft / မှုန်ပျံ့)' 
+                                  : '(Soft / မှုန်ဝါး)'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <input 
+                          type="range" 
+                          min="0" 
+                          max="40" 
+                          step="1"
+                          value={state.textShadowBlur ?? (state.textShadow * 2)} 
+                          onChange={(e) => updateState({ textShadowBlur: parseInt(e.target.value) })} 
+                          className="w-full accent-blue-500" 
+                        />
+
+                        {/* Quick Presets for Shadow Blur */}
+                        <div className="flex items-center justify-between pt-1">
+                          <div className="flex gap-1.5">
+                            {[
+                              { label: 'Sharp (0px)', val: 0 },
+                              { label: 'Crisp (4px)', val: 4 },
+                              { label: 'Standard (8px)', val: 8 },
+                              { label: 'Soft (16px)', val: 16 },
+                              { label: 'Glow (28px)', val: 28 },
+                            ].map(preset => {
+                              const currentBlur = state.textShadowBlur ?? (state.textShadow * 2);
+                              const isSelected = currentBlur === preset.val;
+                              return (
+                                <button
+                                  key={preset.label}
+                                  type="button"
+                                  onClick={() => updateState({ textShadowBlur: preset.val })}
+                                  className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase transition-all ${
+                                    isSelected 
+                                      ? 'bg-blue-600 text-white' 
+                                      : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                                  }`}
+                                >
+                                  {preset.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Letter Spacing (Tracking) Slider */}
+                      <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-1.5">
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
+                              Letter Spacing / Tracking (စာလုံးအကွာအဝေး)
+                            </label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-blue-400 font-mono font-bold">
+                              {(state.letterSpacing || 0) > 0 ? `+${state.letterSpacing}px` : `${state.letterSpacing || 0}px`}
+                            </span>
+                            {(state.letterSpacing || 0) !== 0 && (
+                              <button
+                                type="button"
+                                onClick={() => updateState({ letterSpacing: 0 })}
+                                className="text-[9px] text-zinc-500 hover:text-zinc-300 uppercase underline"
+                              >
+                                Reset
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <input 
+                          type="range" 
+                          min="-5" 
+                          max="30" 
+                          step="1"
+                          value={state.letterSpacing || 0} 
+                          onChange={(e) => updateState({ letterSpacing: parseInt(e.target.value) || 0 })} 
+                          className="w-full accent-blue-500" 
+                        />
+
+                        {/* Quick Presets for Letter Spacing */}
+                        <div className="flex items-center justify-between pt-1">
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { label: 'Tight (-2px)', val: -2 },
+                              { label: 'Normal (0px)', val: 0 },
+                              { label: 'Slight (2px)', val: 2 },
+                              { label: 'Wide (6px)', val: 6 },
+                              { label: 'Cinema (14px)', val: 14 },
+                            ].map(preset => {
+                              const isSelected = (state.letterSpacing || 0) === preset.val;
+                              return (
+                                <button
+                                  key={preset.label}
+                                  type="button"
+                                  onClick={() => updateState({ letterSpacing: preset.val })}
+                                  className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase transition-all ${
+                                    isSelected 
+                                      ? 'bg-blue-600 text-white' 
+                                      : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                                  }`}
+                                >
+                                  {preset.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Line-Height (Vertical Spacing) Slider */}
+                      <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-1.5">
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
+                              Line Height / Vertical Spacing (စာကြောင်း အကွာအဝေး)
+                            </label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-blue-400 font-mono font-bold">
+                              {(state.lineHeight || 1.35).toFixed(2)}x
+                            </span>
+                            {(state.lineHeight || 1.35) !== 1.35 && (
+                              <button
+                                type="button"
+                                onClick={() => updateState({ lineHeight: 1.35 })}
+                                className="text-[9px] text-zinc-500 hover:text-zinc-300 uppercase underline"
+                              >
+                                Reset
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <input 
+                          type="range" 
+                          min="0.8" 
+                          max="2.2" 
+                          step="0.05"
+                          value={state.lineHeight || 1.35} 
+                          onChange={(e) => updateState({ lineHeight: parseFloat(e.target.value) || 1.35 })} 
+                          className="w-full accent-blue-500" 
+                        />
+
+                        {/* Quick Presets for Line-Height */}
+                        <div className="flex items-center justify-between pt-1">
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { label: 'Compact (1.0)', val: 1.0 },
+                              { label: 'Snug (1.15)', val: 1.15 },
+                              { label: 'Standard (1.35)', val: 1.35 },
+                              { label: 'Relaxed (1.6)', val: 1.6 },
+                              { label: 'Loose (1.9)', val: 1.9 },
+                            ].map(preset => {
+                              const isSelected = Math.abs((state.lineHeight || 1.35) - preset.val) < 0.03;
+                              return (
+                                <button
+                                  key={preset.label}
+                                  type="button"
+                                  onClick={() => updateState({ lineHeight: preset.val })}
+                                  className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase transition-all ${
+                                    isSelected 
+                                      ? 'bg-blue-600 text-white' 
+                                      : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                                  }`}
+                                >
+                                  {preset.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Gradient Text Section */}
+                      <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-500 flex items-center justify-center shadow-sm">
+                              <Sparkles size={10} className="text-white" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block">
+                                Gradient Text (စာသား ကာလာပြေး)
+                              </label>
+                              <span className="text-[8px] text-zinc-500">
+                                {state.titleGradientEnabled ? 'Linear Gradient Enabled' : 'Solid Color Active'}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => updateState({ titleGradientEnabled: !state.titleGradientEnabled })}
+                            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all flex items-center gap-1.5 ${
+                              state.titleGradientEnabled 
+                                ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-md shadow-purple-600/30' 
+                                : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300 border border-zinc-800'
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${state.titleGradientEnabled ? 'bg-white animate-pulse' : 'bg-zinc-600'}`} />
+                            <span>{state.titleGradientEnabled ? 'ON' : 'OFF'}</span>
+                          </button>
+                        </div>
+
+                        {state.titleGradientEnabled && (
+                          <div className="space-y-3 pt-2 border-t border-zinc-900/80 animate-in fade-in duration-200">
+                            {/* Live Gradient Preview Bar */}
+                            <div 
+                              className="h-9 rounded-lg flex items-center justify-center text-xs font-black uppercase tracking-wider shadow-inner text-white border border-white/10"
+                              style={{
+                                background: `linear-gradient(${state.titleGradientDirection || 'to right'}, ${state.titleGradientStart || '#ff007a'}, ${state.titleGradientEnd || '#7928ca'})`
+                              }}
+                            >
+                              <span className="drop-shadow-md text-[11px] font-extrabold tracking-wide">
+                                Linear Gradient Preview
+                              </span>
+                            </div>
+
+                            {/* Start & End Color Pickers */}
+                            <div className="grid grid-cols-2 gap-2.5">
+                              {/* Start Color */}
+                              <div className="bg-zinc-900/80 p-2.5 rounded-lg border border-zinc-800 space-y-1.5">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">Start Color</span>
+                                  <span className="text-[9px] font-mono text-zinc-300 uppercase">{state.titleGradientStart || '#ff007a'}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="color"
+                                    value={state.titleGradientStart || '#ff007a'}
+                                    onChange={(e) => updateState({ titleGradientStart: e.target.value })}
+                                    className="w-full h-7 rounded border-0 cursor-pointer bg-transparent"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* End Color */}
+                              <div className="bg-zinc-900/80 p-2.5 rounded-lg border border-zinc-800 space-y-1.5">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">End Color</span>
+                                  <span className="text-[9px] font-mono text-zinc-300 uppercase">{state.titleGradientEnd || '#7928ca'}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="color"
+                                    value={state.titleGradientEnd || '#7928ca'}
+                                    onChange={(e) => updateState({ titleGradientEnd: e.target.value })}
+                                    className="w-full h-7 rounded border-0 cursor-pointer bg-transparent"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Swap Colors & Direction Controls */}
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const temp = state.titleGradientStart || '#ff007a';
+                                  updateState({
+                                    titleGradientStart: state.titleGradientEnd || '#7928ca',
+                                    titleGradientEnd: temp,
+                                  });
+                                }}
+                                className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-lg text-[9px] font-bold border border-zinc-800 flex items-center gap-1 transition-all"
+                                title="Swap Start & End Colors"
+                              >
+                                <span>⇄</span>
+                                <span>Swap Colors</span>
+                              </button>
+
+                              <div className="flex gap-1">
+                                {[
+                                  { label: '→ Right', dir: 'to right' },
+                                  { label: '↓ Down', dir: 'to bottom' },
+                                  { label: '↘ Diag', dir: '135deg' },
+                                  { label: '↗ UpDiag', dir: '45deg' },
+                                ].map((d) => (
+                                  <button
+                                    key={d.dir}
+                                    type="button"
+                                    onClick={() => updateState({ titleGradientDirection: d.dir })}
+                                    className={`px-2 py-1 rounded text-[8px] font-bold uppercase transition-all ${
+                                      (state.titleGradientDirection || 'to right') === d.dir
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'
+                                    }`}
+                                  >
+                                    {d.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Curated High-Impact Gradient Presets */}
+                            <div className="space-y-1.5 pt-2 border-t border-zinc-900">
+                              <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                Quick Gradient Styles (စတိုင်များ)
+                              </label>
+                              <div className="grid grid-cols-4 gap-1.5">
+                                {[
+                                  { name: 'Sunset', start: '#ff416c', end: '#ff4b2b', dir: 'to right' },
+                                  { name: 'Cyber', start: '#00f2fe', end: '#4facfe', dir: 'to right' },
+                                  { name: 'Gold', start: '#ffe259', end: '#ffa751', dir: 'to right' },
+                                  { name: 'Neon', start: '#da22ff', end: '#9733ee', dir: '135deg' },
+                                  { name: 'Toxic', start: '#11998e', end: '#38ef7d', dir: 'to right' },
+                                  { name: 'Rose', start: '#ff0844', end: '#ffb199', dir: 'to right' },
+                                  { name: 'Silver', start: '#ffffff', end: '#94a3b8', dir: 'to bottom' },
+                                  { name: 'Fire', start: '#f12711', end: '#f5af19', dir: 'to right' },
+                                ].map((preset) => (
+                                  <button
+                                    key={preset.name}
+                                    type="button"
+                                    onClick={() => updateState({
+                                      titleGradientStart: preset.start,
+                                      titleGradientEnd: preset.end,
+                                      titleGradientDirection: preset.dir,
+                                      titleGradientEnabled: true,
+                                    })}
+                                    className="p-1.5 rounded-lg border border-zinc-800 hover:border-zinc-600 flex flex-col items-center gap-1 bg-zinc-900/60 transition-all hover:scale-105 active:scale-95"
+                                  >
+                                    <div 
+                                      className="w-full h-3 rounded"
+                                      style={{ background: `linear-gradient(${preset.dir}, ${preset.start}, ${preset.end})` }}
+                                    />
+                                    <span className="text-[8px] font-bold text-zinc-300">{preset.name}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -741,32 +1512,111 @@ export default function App() {
                       <>
                         <div className="h-px bg-zinc-800" />
                         <div className="space-y-4">
-                          <label className="text-[10px] font-bold text-zinc-500 uppercase">Transform</label>
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold text-zinc-500 uppercase">Transform & Position</label>
+                            <span className="text-[9px] font-mono text-blue-400 font-bold">
+                              X: {state.characterPos.x}px | Y: {state.characterPos.y}px
+                            </span>
+                          </div>
+
+                          {/* Visual Drag & Drop Canvas Hint Banner */}
+                          <div className="bg-blue-950/30 border border-blue-500/30 rounded-xl p-3 flex items-start gap-2.5">
+                            <div className="w-5 h-5 rounded-md bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <Move size={12} />
+                            </div>
+                            <div className="text-[10px] leading-relaxed text-zinc-300">
+                              <strong className="text-blue-400 font-bold block">Canvas Drag & Drop Active</strong>
+                              Preview ပေါ်ရှိ လူပုံကို တိုက်ရိုက် Click နှိပ်ပြီး မိမိကြိုက်ရာနေရာသို့ ဆွဲရွှေ့ (Drag & Drop) နိုင်ပါသည်။
+                            </div>
+                          </div>
+
                           <div className="space-y-4 bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-                            <div className="flex items-center gap-3">
-                              <label className="text-[9px] text-zinc-600 font-black w-8">SCALE</label>
-                              <input type="range" min="10" max="250" value={state.characterScale} onChange={(e) => updateState({ characterScale: parseInt(e.target.value) })} className="flex-1 accent-blue-500" />
+                            {/* Scale Slider */}
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between text-[9px] text-zinc-400">
+                                <span className="font-bold">SIZE / SCALE</span>
+                                <span className="font-mono text-zinc-200">{state.characterScale}%</span>
+                              </div>
+                              <input 
+                                type="range" 
+                                min="10" 
+                                max="250" 
+                                value={state.characterScale} 
+                                onChange={(e) => updateState({ characterScale: parseInt(e.target.value) })} 
+                                className="w-full accent-blue-500" 
+                              />
                             </div>
-                            <div className="flex items-center gap-3">
-                              <label className="text-[9px] text-zinc-600 font-black w-8">X POS</label>
-                              <input type="range" min="-1000" max="1000" value={state.characterPos.x} onChange={(e) => updateNestedState('characterPos', { x: parseInt(e.target.value) })} className="flex-1 accent-blue-500" />
+
+                            {/* X Position Slider */}
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between text-[9px] text-zinc-400">
+                                <span className="font-bold">HORIZONTAL (X POS)</span>
+                                <span className="font-mono text-zinc-200">{state.characterPos.x}px</span>
+                              </div>
+                              <input 
+                                type="range" 
+                                min="-1000" 
+                                max="1000" 
+                                value={state.characterPos.x} 
+                                onChange={(e) => updateNestedState('characterPos', { x: parseInt(e.target.value) })} 
+                                className="w-full accent-blue-500" 
+                              />
                             </div>
-                            <div className="flex items-center gap-3">
-                              <label className="text-[9px] text-zinc-600 font-black w-8">Y POS</label>
-                              <input type="range" min="-1000" max="1000" value={state.characterPos.y} onChange={(e) => updateNestedState('characterPos', { y: parseInt(e.target.value) })} className="flex-1 accent-blue-500" />
+
+                            {/* Y Position Slider */}
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between text-[9px] text-zinc-400">
+                                <span className="font-bold">VERTICAL (Y POS)</span>
+                                <span className="font-mono text-zinc-200">{state.characterPos.y}px</span>
+                              </div>
+                              <input 
+                                type="range" 
+                                min="-1000" 
+                                max="1000" 
+                                value={state.characterPos.y} 
+                                onChange={(e) => updateNestedState('characterPos', { y: parseInt(e.target.value) })} 
+                                className="w-full accent-blue-500" 
+                              />
                             </div>
-                            <div className="flex gap-2">
-                              <button 
-                                onClick={() => updateState({ characterFlip: !state.characterFlip })}
-                                className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${state.characterFlip ? 'bg-blue-600 border-blue-400 text-white' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}
+
+                            {/* Quick Alignments */}
+                            <div className="pt-2 border-t border-zinc-900 grid grid-cols-4 gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => updateState({ characterPos: { x: -650, y: 0 } })}
+                                className="px-2 py-1.5 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white rounded-lg text-[8px] font-bold uppercase transition-all"
                               >
-                                Flip Horizontal
+                                Left
                               </button>
-                              <button 
+                              <button
+                                type="button"
+                                onClick={() => updateState({ characterPos: { x: -300, y: 0 } })}
+                                className="px-2 py-1.5 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white rounded-lg text-[8px] font-bold uppercase transition-all"
+                              >
+                                Center
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => updateState({ characterPos: { x: 0, y: 0 } })}
-                                className="px-4 py-2 bg-zinc-900 border border-zinc-800 text-zinc-500 rounded-lg text-[9px] font-black uppercase hover:bg-zinc-800"
+                                className="px-2 py-1.5 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white rounded-lg text-[8px] font-bold uppercase transition-all"
+                              >
+                                Right
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateState({ characterPos: { x: 0, y: 0 }, characterScale: 100 })}
+                                className="px-2 py-1.5 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-red-400 rounded-lg text-[8px] font-bold uppercase transition-all"
                               >
                                 Reset
+                              </button>
+                            </div>
+
+                            <div className="flex gap-2 pt-1">
+                              <button 
+                                onClick={() => updateState({ characterFlip: !state.characterFlip })}
+                                className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${state.characterFlip ? 'bg-blue-600 border-blue-400 text-white' : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'}`}
+                              >
+                                Flip Horizontal {state.characterFlip ? '(Flipped)' : ''}
                               </button>
                             </div>
                           </div>
@@ -921,6 +1771,275 @@ export default function App() {
               </div>
             )}
 
+            {activeTab === 'motion' && (
+              <div className="space-y-6 animate-in">
+                <section className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-zinc-500">
+                      <Film size={14} />
+                      <h2 className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Title Motion & Entry Animations</h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateState({ animationPlayKey: (state.animationPlayKey || 0) + 1 }, false)}
+                      className="flex items-center gap-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all border border-blue-500/30 active:scale-95"
+                      title="Replay CSS Animation"
+                    >
+                      <RotateCcw size={12} />
+                      <span>Replay</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-6 bg-zinc-900/30 p-5 rounded-2xl border border-zinc-800/50">
+                    {/* Live Play Action Card */}
+                    <div className="bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-purple-900/40 p-4 rounded-xl border border-blue-500/30 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-black text-white flex items-center gap-1.5">
+                            <Sparkles size={14} className="text-yellow-400" />
+                            <span>Live Animation Preview</span>
+                          </p>
+                          <p className="text-[10px] text-zinc-400 mt-0.5">
+                            Active: <span className="text-blue-400 font-bold uppercase">{state.titleAnimation || 'none'}</span>
+                            {state.titleAnimation !== 'none' && ` • ${state.animationDuration || 0.8}s`}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => updateState({ animationPlayKey: (state.animationPlayKey || 0) + 1 }, false)}
+                          className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-blue-600/30 active:scale-95 transition-all"
+                        >
+                          <Play size={12} className="fill-white" />
+                          <span>Play</span>
+                        </button>
+                      </div>
+
+                      {/* Quick animation presets chips */}
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => updateState({ 
+                            titleAnimation: 'popBounce', 
+                            animationDuration: 0.6, 
+                            animationIteration: 'once',
+                            animationPlayKey: (state.animationPlayKey || 0) + 1 
+                          })}
+                          className="text-[9px] bg-zinc-950/70 hover:bg-blue-600/30 text-zinc-300 hover:text-white px-2 py-1 rounded-md border border-zinc-800 font-medium transition-all"
+                        >
+                          ⚡ Punchy Pop
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateState({ 
+                            titleAnimation: 'slideUp', 
+                            animationDuration: 1.0, 
+                            animationIteration: 'once',
+                            animationPlayKey: (state.animationPlayKey || 0) + 1 
+                          })}
+                          className="text-[9px] bg-zinc-950/70 hover:bg-blue-600/30 text-zinc-300 hover:text-white px-2 py-1 rounded-md border border-zinc-800 font-medium transition-all"
+                        >
+                          🎬 Cinematic Slide
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateState({ 
+                            titleAnimation: 'float', 
+                            animationDuration: 2.2, 
+                            animationIteration: 'infinite',
+                            animationPlayKey: (state.animationPlayKey || 0) + 1 
+                          })}
+                          className="text-[9px] bg-zinc-950/70 hover:bg-blue-600/30 text-zinc-300 hover:text-white px-2 py-1 rounded-md border border-zinc-800 font-medium transition-all"
+                        >
+                          ☁️ Smooth Float
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateState({ 
+                            titleAnimation: 'pulseGlow', 
+                            animationDuration: 1.6, 
+                            animationIteration: 'infinite',
+                            animationPlayKey: (state.animationPlayKey || 0) + 1 
+                          })}
+                          className="text-[9px] bg-zinc-950/70 hover:bg-blue-600/30 text-zinc-300 hover:text-white px-2 py-1 rounded-md border border-zinc-800 font-medium transition-all"
+                        >
+                          ✨ Neon Glow
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Entry Animations Grid */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase">Select Animation Style (စတိုင်ရွေးရန်)</label>
+                        <span className="text-[10px] text-zinc-500 font-mono">11 Presets</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { id: 'none', label: 'None', burmese: 'မသုံးပါ (Static)', icon: Slash },
+                          { id: 'fadeIn', label: 'Fade In', burmese: 'မှိန်ရာမှ ပေါ်လာခြင်း', icon: Eye },
+                          { id: 'slideUp', label: 'Slide Up', burmese: 'အောက်မှ တက်လာခြင်း', icon: ArrowUp },
+                          { id: 'slideDown', label: 'Slide Down', burmese: 'အထက်မှ ဆင်းလာခြင်း', icon: ArrowDown },
+                          { id: 'slideLeft', label: 'Slide In Left', burmese: 'ညာမှ ဘယ်သို့ ဝင်လာခြင်း', icon: ArrowLeft },
+                          { id: 'slideRight', label: 'Slide In Right', burmese: 'ဘယ်မှ ညာသို့ ဝင်လာခြင်း', icon: ArrowRight },
+                          { id: 'scale', label: 'Scale / Zoom', burmese: 'ချဲ့၍ ပေါ်လာခြင်း', icon: Maximize2 },
+                          { id: 'popBounce', label: 'Pop & Bounce', burmese: 'ခုန်ပျံ၍ ဝင်လာခြင်း', icon: Sparkles },
+                          { id: 'flipIn', label: '3D Flip In', burmese: '၃ ဘက်မြင် လှည့်ပတ်ခြင်း', icon: RotateCw },
+                          { id: 'pulseGlow', label: 'Pulse & Glow', burmese: 'တောက်ပ လှုပ်ရှားခြင်း', icon: Zap },
+                          { id: 'float', label: 'Gentle Float', burmese: 'ဝဲပျံ လှုပ်ရှားနေခြင်း', icon: Activity },
+                        ].map((item) => {
+                          const isSelected = (state.titleAnimation || 'none') === item.id;
+                          const IconComp = item.icon;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                updateState({
+                                  titleAnimation: item.id as any,
+                                  animationPlayKey: (state.animationPlayKey || 0) + 1,
+                                });
+                              }}
+                              className={`p-3 rounded-xl border text-left flex flex-col gap-1.5 transition-all relative ${
+                                isSelected
+                                  ? 'bg-blue-600/15 border-blue-500 text-white shadow-lg shadow-blue-500/10'
+                                  : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                                  isSelected ? 'bg-blue-500 text-white' : 'bg-zinc-900 text-zinc-400'
+                                }`}>
+                                  <IconComp size={14} />
+                                </div>
+                                {isSelected && (
+                                  <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                                )}
+                              </div>
+                              <span className="text-xs font-bold text-zinc-100">{item.label}</span>
+                              <span className="text-[9px] text-zinc-500 leading-tight">{item.burmese}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-zinc-800" />
+
+                    {/* Target Elements Selection */}
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase">Apply Animation To (သက်ရောက်မည့် စာသား)</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { id: 'both', label: 'All Titles' },
+                          { id: 'title1', label: 'Title 1 Only' },
+                          { id: 'title2', label: 'Title 2 Only' },
+                        ].map(target => (
+                          <button
+                            key={target.id}
+                            type="button"
+                            onClick={() => updateState({ 
+                              animationTarget: target.id as any,
+                              animationPlayKey: (state.animationPlayKey || 0) + 1 
+                            })}
+                            className={`py-2 px-2 rounded-lg text-[10px] font-bold border transition-all ${
+                              (state.animationTarget || 'both') === target.id
+                                ? 'bg-blue-600 text-white border-blue-400'
+                                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            {target.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Motion Settings Sliders */}
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase">Animation Timing (အချိန်ချိန်ညှိမှုများ)</label>
+                      
+                      <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-4">
+                        {/* Duration */}
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Duration (ကြာချိန်)</span>
+                            <span className="text-[10px] text-blue-400 font-mono font-bold">{state.animationDuration || 0.8}s</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0.2"
+                            max="3.0"
+                            step="0.1"
+                            value={state.animationDuration || 0.8}
+                            onChange={(e) => updateState({ 
+                              animationDuration: parseFloat(e.target.value),
+                              animationPlayKey: (state.animationPlayKey || 0) + 1 
+                            })}
+                            className="w-full accent-blue-500"
+                          />
+                        </div>
+
+                        {/* Delay */}
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Start Delay (နှောင့်နှေးချိန်)</span>
+                            <span className="text-[10px] text-blue-400 font-mono font-bold">{state.animationDelay || 0}s</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0.0"
+                            max="2.0"
+                            step="0.05"
+                            value={state.animationDelay || 0}
+                            onChange={(e) => updateState({ 
+                              animationDelay: parseFloat(e.target.value),
+                              animationPlayKey: (state.animationPlayKey || 0) + 1 
+                            })}
+                            className="w-full accent-blue-500"
+                          />
+                        </div>
+
+                        {/* Iteration Mode */}
+                        <div className="pt-2 border-t border-zinc-900 space-y-2">
+                          <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Repeat Mode (လှုပ်ရှားမှု ပုံစံ)</span>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => updateState({ 
+                                animationIteration: 'once',
+                                animationPlayKey: (state.animationPlayKey || 0) + 1 
+                              })}
+                              className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${
+                                (state.animationIteration || 'once') === 'once'
+                                  ? 'bg-blue-600 text-white border-blue-400'
+                                  : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                              }`}
+                            >
+                              Play Once (၁ ကြိမ်)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateState({ 
+                                animationIteration: 'infinite',
+                                animationPlayKey: (state.animationPlayKey || 0) + 1 
+                              })}
+                              className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${
+                                state.animationIteration === 'infinite'
+                                  ? 'bg-blue-600 text-white border-blue-400'
+                                  : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                              }`}
+                            >
+                              Loop Forever (အမြဲ)
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
+
             {activeTab === 'border' && (
               <div className="space-y-6 animate-in">
                 <section className="space-y-4">
@@ -1056,7 +2175,7 @@ export default function App() {
 
         {/* 4. Mobile Bottom Nav */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#050505]/95 backdrop-blur-xl border-t border-zinc-900 flex items-center justify-around z-50 px-2">
-          {(['content', 'character', 'style', 'border', 'settings'] as const).map(tab => (
+          {(['content', 'character', 'style', 'motion', 'border', 'settings'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1067,6 +2186,7 @@ export default function App() {
               {tab === 'content' && <Type size={18} />}
               {tab === 'character' && <User size={18} />}
               {tab === 'style' && <Palette size={18} />}
+              {tab === 'motion' && <Film size={18} />}
               {tab === 'border' && <Square size={18} />}
               {tab === 'settings' && <SettingsIcon size={18} />}
               <span className="text-[8px] font-bold uppercase tracking-tighter">{tab}</span>
@@ -1074,6 +2194,105 @@ export default function App() {
           ))}
         </nav>
       </main>
+
+      {/* Export / Save to Photos Modal (iPhone Safari & Mobile Optimized) */}
+      {showExportModal && exportedImage && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-xl w-full p-4 sm:p-6 shadow-2xl space-y-4 my-auto relative animate-in text-left">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-white">Thumbnail Ready! (ပုံထုတ်ပြီးပါပြီ)</h3>
+                  <p className="text-[10px] text-zinc-400">Format: {state.canvasRatio === '9:16' ? '720x1280 (Shorts)' : state.canvasRatio === '1:1' ? '1080x1080 (Square)' : '1280x720 (HD)'}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                className="w-8 h-8 rounded-full bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-all hover:bg-zinc-700"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Rendered Image Preview with iOS long-press support */}
+            <div className="relative rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-950/80 p-2 flex items-center justify-center">
+              <img
+                src={exportedImage.dataUrl}
+                alt="Exported Thumbnail"
+                className="max-h-[42vh] sm:max-h-[48vh] w-auto object-contain rounded-xl shadow-2xl select-auto pointer-events-auto"
+                style={{ WebkitTouchCallout: 'default' }}
+              />
+            </div>
+
+            {/* iPhone / Safari Helper Notice */}
+            <div className="bg-blue-950/40 border border-blue-500/30 rounded-2xl p-3.5 flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Smartphone size={18} />
+              </div>
+              <div className="space-y-1 text-left flex-1">
+                <div className="text-xs font-bold text-white flex items-center gap-2">
+                  <span>iPhone / Safari သုံးစွဲသူများအတွက်</span>
+                  <span className="text-[9px] bg-blue-500/30 text-blue-300 px-2 py-0.5 rounded-full font-bold uppercase">iOS Guide</span>
+                </div>
+                <div className="text-[11px] leading-relaxed text-zinc-300 space-y-1">
+                  <p>
+                    <strong>နည်းလမ်း ၁:</strong> အောက်ပါ <span className="text-blue-400 font-bold">"Save to Photos (iPhone)"</span> ခလုတ်ကို နှိပ်ပြီး Photos ထဲသို့ တိုက်ရိုက်သိမ်းပါ။
+                  </p>
+                  <p>
+                    <strong>နည်းလမ်း ၂:</strong> အပေါ်ရှိ ပုံပေါ်ကို လက်ဖြင့် ၁ စက္ကန့်ခန့် <span className="text-yellow-400 font-bold">ဖိနှိပ်ထားပြီး (Touch & Hold)</span> ပေါ်လာသော မီနူးထဲမှ <span className="text-white font-bold">"Save to Photos"</span> (သို့မဟုတ် "Add to Photos") ကို ရွေးချယ်နိုင်ပါသည်။
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleShareToPhotos}
+                className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 active:scale-95 transition-all"
+              >
+                <Share2 size={16} />
+                <span>Save to Photos (iPhone)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDirectDownload}
+                className="w-full py-3 px-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border border-zinc-700 active:scale-95 transition-all"
+              >
+                <Download size={16} />
+                <span>Download File</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyImage}
+                className="w-full py-3 px-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border border-zinc-700 active:scale-95 transition-all"
+              >
+                {copySuccess ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+                <span>{copySuccess ? 'Copied!' : 'Copy Image'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Error Alert Toast */}
+      {exportError && (
+        <div className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 bg-red-950/95 border border-red-500 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs max-w-md animate-in">
+          <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
+          <span className="flex-1">{exportError}</span>
+          <button onClick={() => setExportError(null)} className="text-zinc-400 hover:text-white">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
