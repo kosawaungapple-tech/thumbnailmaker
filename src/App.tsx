@@ -56,6 +56,7 @@ import {
   LayoutTemplate as LayoutTemplateIcon
 } from 'lucide-react';
 import { LAYOUT_TEMPLATES, LayoutTemplate } from './data/layoutTemplates';
+import { LiveUsersBadge } from './components/LiveUsersBadge';
 import {
   CustomFontRecord,
   loadAndRegisterStoredFonts,
@@ -947,6 +948,7 @@ export default function App() {
               <Sparkles className="text-white" size={18} />
             </div>
             <h1 className="text-lg sm:text-xl font-black tracking-tighter">THUMBNAIL<span className="text-blue-500">PRO</span></h1>
+            <LiveUsersBadge />
           </div>
           
           <div className="flex items-center gap-1.5 sm:gap-4">
