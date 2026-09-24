@@ -1,10 +1,27 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 
+export interface DailyHistoryItem {
+  date: string;
+  uniqueUsers: number;
+  pageViews: number;
+  peakConcurrent: number;
+}
+
 export interface LiveUsersState {
   activeUsers: number;
   peakUsers: number;
+  todayUsers: number;
+  totalAllTimeUsers: number;
   isConnected: boolean;
   status: 'connected' | 'connecting' | 'disconnected';
+  fetchDailyAnalytics: () => Promise<{
+    todayDate: string;
+    todayUsers: number;
+    todayPageViews: number;
+    totalAllTimeUsers: number;
+    totalPageViews: number;
+    dailyHistory: DailyHistoryItem[];
+  } | null>;
 }
 
 function getOrCreateSessionId(): string {
@@ -24,6 +41,8 @@ function getOrCreateSessionId(): string {
 export function useLiveUsers(): LiveUsersState {
   const [activeUsers, setActiveUsers] = useState<number>(1);
   const [peakUsers, setPeakUsers] = useState<number>(1);
+  const [todayUsers, setTodayUsers] = useState<number>(1);
+  const [totalAllTimeUsers, setTotalAllTimeUsers] = useState<number>(1);
   const [status, setStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
   const wsRef = useRef<WebSocket | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -31,15 +50,36 @@ export function useLiveUsers(): LiveUsersState {
   const heartbeatIntervalRef = useRef<number | null>(null);
   const sessionId = useRef<string>(getOrCreateSessionId());
 
-  const handleUpdate = useCallback((data: { activeUsers?: number; peakUsers?: number }) => {
+  const handleUpdate = useCallback((data: { activeUsers?: number; peakUsers?: number; todayUsers?: number; totalAllTimeUsers?: number }) => {
     if (typeof data.activeUsers === 'number') {
       setActiveUsers(Math.max(1, data.activeUsers));
     }
     if (typeof data.peakUsers === 'number') {
       setPeakUsers(prev => Math.max(prev, data.peakUsers || 1));
     }
+    if (typeof data.todayUsers === 'number') {
+      setTodayUsers(Math.max(1, data.todayUsers));
+    }
+    if (typeof data.totalAllTimeUsers === 'number') {
+      setTotalAllTimeUsers(Math.max(1, data.totalAllTimeUsers));
+    }
     setStatus('connected');
   }, []);
+
+  const fetchDailyAnalytics = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/analytics/daily?sessionId=${encodeURIComponent(sessionId.current)}`);
+      if (res.ok) {
+        const json = await res.json();
+        handleUpdate(json);
+        return json;
+      }
+      return null;
+    } catch (err) {
+      console.warn('Failed to fetch daily analytics:', err);
+      return null;
+    }
+  }, [handleUpdate]);
 
   const sendHeartbeat = useCallback(async () => {
     // If WS open, send ping
@@ -204,7 +244,10 @@ export function useLiveUsers(): LiveUsersState {
   return {
     activeUsers,
     peakUsers,
+    todayUsers,
+    totalAllTimeUsers,
     isConnected: status === 'connected',
     status,
+    fetchDailyAnalytics,
   };
 }
