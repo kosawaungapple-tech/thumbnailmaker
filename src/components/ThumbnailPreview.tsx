@@ -2,7 +2,7 @@
 import React from 'react';
 import { ThumbnailState } from '../types';
 import { motion } from 'motion/react';
-import { Move, UploadCloud } from 'lucide-react';
+import { Move, UploadCloud, User } from 'lucide-react';
 
 interface Props {
   state: ThumbnailState;
@@ -159,36 +159,129 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
     };
   };
 
-  // Title Border Box (with Corner Radius: Sharp, Rounded, Pill-shaped)
-  const isTitleBorderActive = Boolean(state.titleBorderWidth && state.titleBorderWidth > 0);
-  const rawRadius = state.titleBorderRadius ?? 0;
-  const titleBorderRadiusCss = rawRadius >= 50 
-    ? '9999px' 
-    : rawRadius === 0 
-      ? '0px' 
-      : `${rawRadius}px`;
+  // Title Background Preset & Shape Styling
+  const getTitleBackgroundAndShape = () => {
+    let background = state.titleBorderBg || 'transparent';
+    let border = state.titleBorderWidth ? `${state.titleBorderWidth}px solid ${state.titleBorderColor || '#ffffff'}` : 'none';
+    const rawRadius = state.titleBorderRadius ?? 16;
+    let borderRadius = rawRadius >= 50 ? '9999px' : rawRadius === 0 ? '0px' : `${rawRadius}px`;
+    let clipPath = 'none';
+    let transformExtra = '';
+    let paddingX = state.titleBgPaddingX ?? Math.max(16, Math.round(state.titleSize * 0.28));
+    let paddingY = state.titleBgPaddingY ?? Math.max(8, Math.round(state.titleSize * 0.1));
+    let boxShadow = 'none';
 
-  const titleBorderBoxStyle: React.CSSProperties = isTitleBorderActive ? {
-    border: `${state.titleBorderWidth}px solid ${state.titleBorderColor || '#ffffff'}`,
-    borderRadius: titleBorderRadiusCss,
-    padding: `${Math.max(6, Math.round(state.titleSize * 0.08))}px ${Math.max(16, Math.round(state.titleSize * 0.28))}px`,
-    backgroundColor: state.titleBorderBg || 'transparent',
-    boxSizing: 'border-box',
-    display: 'inline-block',
-    width: 'fit-content',
-  } : {};
+    // Preset backgrounds
+    switch (state.titleBgPreset) {
+      case 'glass':
+        background = 'rgba(0, 0, 0, 0.72)';
+        border = border === 'none' ? '2px solid rgba(255, 255, 255, 0.25)' : border;
+        boxShadow = '0 20px 40px rgba(0, 0, 0, 0.6)';
+        break;
+      case 'gold':
+        background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #78350f 100%)';
+        border = border === 'none' ? '3px solid #fef08a' : border;
+        boxShadow = '0 15px 35px rgba(245, 158, 11, 0.4)';
+        break;
+      case 'crimson':
+        background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #991b1b 100%)';
+        border = border === 'none' ? '3px solid #fca5a5' : border;
+        boxShadow = '0 15px 35px rgba(239, 68, 68, 0.4)';
+        break;
+      case 'emerald':
+        background = 'linear-gradient(135deg, #10b981 0%, #059669 50%, #064e3b 100%)';
+        border = border === 'none' ? '3px solid #6ee7b7' : border;
+        boxShadow = '0 15px 35px rgba(16, 185, 129, 0.4)';
+        break;
+      case 'sapphire':
+        background = 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 50%, #1e1b4b 100%)';
+        border = border === 'none' ? '3px solid #93c5fd' : border;
+        boxShadow = '0 15px 35px rgba(59, 130, 246, 0.4)';
+        break;
+      case 'purple':
+        background = 'linear-gradient(135deg, #a855f7 0%, #7c3aed 50%, #4c1d95 100%)';
+        border = border === 'none' ? '3px solid #e9d5ff' : border;
+        boxShadow = '0 15px 35px rgba(168, 85, 247, 0.4)';
+        break;
+      case 'white':
+        background = '#ffffff';
+        border = border === 'none' ? '3px solid #e4e4e7' : border;
+        boxShadow = '0 15px 35px rgba(0, 0, 0, 0.3)';
+        break;
+      case 'custom':
+        background = state.titleBorderBg || '#000000';
+        break;
+      default:
+        break;
+    }
+
+    // Creative Title Shapes (အဖြောင့်ကြီးမဟုတ်ပဲ အခြားပုံစံများ)
+    switch (state.titleShapeStyle) {
+      case 'slant-up':
+        transformExtra = 'rotate(-3.5deg)';
+        break;
+      case 'slant-down':
+        transformExtra = 'rotate(3.5deg)';
+        break;
+      case 'skew-left':
+        transformExtra = 'skewX(-7deg)';
+        borderRadius = '8px';
+        break;
+      case 'skew-right':
+        transformExtra = 'skewX(7deg)';
+        borderRadius = '8px';
+        break;
+      case 'pill':
+        borderRadius = '9999px';
+        paddingX = Math.round(paddingX * 1.3);
+        break;
+      case 'cinema-clip':
+        borderRadius = '0px';
+        clipPath = 'polygon(16px 0%, calc(100% - 16px) 0%, 100% 16px, 100% calc(100% - 16px), calc(100% - 16px) 100%, 16px 100%, 0% calc(100% - 16px), 0% 16px)';
+        break;
+      case 'accent-bar':
+        border = 'none';
+        borderRadius = '8px';
+        boxShadow = `-10px 0 0 0 ${state.titleBorderColor || '#3b82f6'}, 0 15px 30px rgba(0,0,0,0.5)`;
+        break;
+      default:
+        break;
+    }
+
+    const hasActiveBg = (state.titleBgPreset && state.titleBgPreset !== 'none') || 
+                        (state.titleBorderWidth && state.titleBorderWidth > 0) || 
+                        (state.titleBorderBg && state.titleBorderBg !== 'transparent');
+
+    return {
+      hasActiveBg,
+      style: hasActiveBg ? {
+        background,
+        border,
+        borderRadius,
+        clipPath,
+        boxShadow,
+        padding: `${paddingY}px ${paddingX}px`,
+        boxSizing: 'border-box' as const,
+        width: 'fit-content',
+      } : {
+        width: 'fit-content',
+      },
+      transformExtra,
+    };
+  };
+
+  const titleBgAndShape = getTitleBackgroundAndShape();
 
   const characterFilter = (): string => {
     let filters = ['drop-shadow(0 20px 30px rgba(0,0,0,0.5))'];
     
     if (state.characterGlow) {
-      filters.push(`drop-shadow(0 0 40px ${state.characterGlowColor})`);
+      filters.push(`drop-shadow(0 0 35px ${state.characterGlowColor})`);
     }
     
     if (state.characterOutline) {
       const w = state.characterOutlineWidth;
       const c = state.characterOutlineColor;
-      // Simulate outline with 4 shadows
       filters.push(`drop-shadow(${w}px 0 0 ${c})`);
       filters.push(`drop-shadow(-${w}px 0 0 ${c})`);
       filters.push(`drop-shadow(0 ${w}px 0 ${c})`);
@@ -407,11 +500,10 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                 right: '0%',
                 width: 'auto',
                 height: `${state.characterScale}%`,
-                transform: `translate3d(${state.characterPos.x}px, ${state.characterPos.y}px, 0)`,
+                transform: `translate(${state.characterPos.x}px, ${state.characterPos.y}px)`,
                 transformOrigin: 'bottom center',
                 zIndex: 25,
-                display: 'flex',
-                alignItems: 'flex-end',
+                display: 'block',
                 cursor: isDraggingChar ? 'grabbing' : 'grab',
                 userSelect: 'none',
                 touchAction: 'none',
@@ -425,8 +517,7 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                   width: 'auto',
                   transform: state.characterFlip ? 'scaleX(-1)' : 'none',
                   filter: characterFilter(),
-                  display: 'flex',
-                  alignItems: 'flex-end',
+                  display: 'block',
                   position: 'relative',
                   pointerEvents: 'none',
                 }}
@@ -436,11 +527,15 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                   alt="Character" 
                   draggable={false}
                   onDragStart={(e) => e.preventDefault()}
-                  crossOrigin="anonymous"
-                  referrerPolicy="no-referrer"
+                  crossOrigin={state.characterImage.startsWith('data:') ? undefined : 'anonymous'}
+                  referrerPolicy={state.characterImage.startsWith('data:') ? undefined : 'no-referrer'}
+                  loading="eager"
+                  decoding="sync"
                   style={{ 
+                    display: 'block',
                     height: '100%', 
                     width: 'auto', 
+                    maxWidth: 'none',
                     objectFit: 'cover',
                     aspectRatio: state.characterShape !== 'none' ? '1/1' : 'auto',
                     clipPath: getCharacterClipPath(),
@@ -483,6 +578,58 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
             </div>
           )}
 
+          {/* Visual Image/Character Placeholder (shown when template is applied or placeholder is active and no image uploaded) */}
+          {!state.characterImage && state.characterPlaceholder && (
+            <div
+              data-export-ignore="true"
+              onPointerDown={handleCharPointerDown}
+              onPointerMove={handleCharPointerMove}
+              onPointerUp={handleCharPointerUp}
+              onPointerCancel={handleCharPointerUp}
+              onMouseEnter={() => setIsHoveredChar(true)}
+              onMouseLeave={() => { if (!isDraggingChar) setIsHoveredChar(false); }}
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                right: '2%',
+                width: '380px',
+                height: `${state.characterScale || 100}%`,
+                maxHeight: '88%',
+                transform: `translate(${state.characterPos.x}px, ${state.characterPos.y}px)`,
+                transformOrigin: 'bottom center',
+                zIndex: 25,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: isDraggingChar ? 'grabbing' : 'grab',
+                userSelect: 'none',
+                touchAction: 'none',
+              }}
+              className="group"
+            >
+              <div 
+                className="w-full h-[88%] rounded-3xl border-2 border-dashed border-blue-400/80 bg-gradient-to-t from-blue-950/70 via-zinc-900/50 to-zinc-950/30 flex flex-col items-center justify-center p-6 text-center backdrop-blur-xs transition-all group-hover:border-blue-400 shadow-2xl relative"
+                style={{
+                  clipPath: getCharacterClipPath(),
+                  borderRadius: state.characterShape === 'circle' ? '50%' : state.characterShape === 'none' ? '24px' : undefined,
+                }}
+              >
+                <div className="w-16 h-16 rounded-full bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 mb-3 group-hover:scale-110 transition-transform shadow-lg shadow-blue-500/20">
+                  <User size={32} />
+                </div>
+                <span className="text-white text-xs font-black uppercase tracking-wider block">
+                  Image Placeholder
+                </span>
+                <span className="text-[10px] text-blue-300 font-medium mt-1">
+                  (လူ/ဆရာတော်ပုံ ထည့်သွင်းရန်နေရာ)
+                </span>
+                <span className="text-[9px] text-zinc-400 mt-2 bg-zinc-900/90 px-2.5 py-1 rounded-full border border-zinc-700">
+                  Drag to move / Click Character tab to upload
+                </span>
+              </div>
+            </div>
+          )}
+
           <div 
             style={{
               ...contentStyle,
@@ -513,7 +660,9 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                   maxWidth: 'max-content',
                   alignSelf: isCentered ? 'center' : isRight ? 'flex-end' : 'flex-start',
                   textAlign: 'center',
-                  fontSize: state.canvasRatio === '9:16' ? '32px' : '40px',
+                  fontSize: state.highlightSize 
+                    ? `${state.highlightSize}px` 
+                    : (state.canvasRatio === '9:16' ? '32px' : '40px'),
                   fontWeight: '900',
                   fontFamily: state.highlightFont || state.fontFamily || state.titleFont,
                   borderRadius: '10px',
@@ -538,7 +687,12 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                 onUpdate({ titlePos: { x: state.titlePos.x + dx, y: state.titlePos.y + dy } });
               }}
               initial={false}
-              animate={{ x: state.titlePos.x, y: state.titlePos.y, rotate: state.titleRotation || 0 }}
+              animate={{ 
+                x: state.titlePos.x, 
+                y: state.titlePos.y, 
+                rotate: (state.titleRotation || 0) + (state.titleShapeStyle === 'slant-up' ? -3.5 : state.titleShapeStyle === 'slant-down' ? 3.5 : 0),
+                skewX: state.titleShapeStyle === 'skew-left' ? -7 : state.titleShapeStyle === 'skew-right' ? 7 : 0
+              }}
               style={{
                 cursor: 'grab',
                 userSelect: 'none',
@@ -549,7 +703,7 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                 alignSelf: isCentered ? 'center' : isRight ? 'flex-end' : 'flex-start',
                 textAlign: textAlignVal,
                 mixBlendMode: (state.titleBlendMode && state.titleBlendMode !== 'normal') ? (state.titleBlendMode as React.CSSProperties['mixBlendMode']) : undefined,
-                ...titleBorderBoxStyle,
+                ...titleBgAndShape.style,
               }}
             >
               <h1
@@ -617,7 +771,9 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                 initial={false}
                 animate={{ x: state.subtitlePos.x, y: state.subtitlePos.y }}
                 style={{
-                  fontSize: state.canvasRatio === '9:16' ? '40px' : '52px',
+                  fontSize: state.subtitleSize 
+                    ? `${state.subtitleSize}px` 
+                    : (state.canvasRatio === '9:16' ? '40px' : '52px'),
                   fontFamily: state.subtitleFont || state.fontFamily || state.titleFont,
                   fontWeight: '600',
                   color: state.subtitleColor,

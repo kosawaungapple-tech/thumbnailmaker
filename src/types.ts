@@ -54,6 +54,8 @@ export interface ThumbnailState {
   characterGlow: boolean;
   characterGlowColor: string;
   characterShape: 'none' | 'circle' | 'square' | 'hexagon' | 'pentagon' | 'rhombus';
+  characterPlaceholder?: boolean;
+  activeTemplateId?: string;
   // Filters & Effects
   bgBrightness: number;
   bgSaturation: number;
@@ -82,6 +84,8 @@ export interface ThumbnailState {
   letterSpacing?: number;
   titleSize: number;
   title2Size: number;
+  subtitleSize?: number;
+  highlightSize?: number;
   titleFont: string;
   title2Font?: string;
   subtitleFont?: string;
@@ -92,6 +96,11 @@ export interface ThumbnailState {
   titleBorderColor?: string;
   titleBorderRadius?: number;
   titleBorderBg?: string;
+  // Title Background Presets & Creative Shapes
+  titleBgPreset?: 'none' | 'glass' | 'gold' | 'crimson' | 'emerald' | 'sapphire' | 'purple' | 'white' | 'custom';
+  titleShapeStyle?: 'straight' | 'slant-up' | 'slant-down' | 'skew-left' | 'skew-right' | 'cinema-clip' | 'pill' | 'accent-bar';
+  titleBgPaddingX?: number;
+  titleBgPaddingY?: number;
   // Motion / CSS Animations (Optional)
   titleAnimation?: TitleAnimationType;
   animationDuration?: number;

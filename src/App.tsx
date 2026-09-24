@@ -28,6 +28,7 @@ import {
   Settings as SettingsIcon,
   User,
   RotateCw,
+  RotateCcw,
   Move,
   Share2,
   Copy,
@@ -44,8 +45,17 @@ import {
   Trash2,
   CheckCircle2,
   FileType,
-  Plus
+  Plus,
+  Minus,
+  Maximize2,
+  Minimize2,
+  Sliders,
+  Flame,
+  Cpu,
+  Feather,
+  LayoutTemplate as LayoutTemplateIcon
 } from 'lucide-react';
+import { LAYOUT_TEMPLATES, LayoutTemplate } from './data/layoutTemplates';
 import {
   CustomFontRecord,
   loadAndRegisterStoredFonts,
@@ -113,6 +123,8 @@ const INITIAL_STATE: ThumbnailState = {
   letterSpacing: 0,
   titleSize: 110,
   title2Size: 110,
+  subtitleSize: 52,
+  highlightSize: 40,
   titleFont: 'Noto Sans Myanmar',
   title2Font: 'Noto Sans Myanmar',
   subtitleFont: 'Noto Sans Myanmar',
@@ -123,6 +135,10 @@ const INITIAL_STATE: ThumbnailState = {
   titleBorderColor: '#ffffff',
   titleBorderRadius: 16,
   titleBorderBg: 'transparent',
+  titleBgPreset: 'none',
+  titleShapeStyle: 'straight',
+  titleBgPaddingX: 24,
+  titleBgPaddingY: 10,
   // Motion / Animation
   titleAnimation: 'none',
   animationDuration: 0.8,
@@ -135,6 +151,8 @@ const INITIAL_STATE: ThumbnailState = {
   subtitlePos: { x: 0, y: 0 },
   highlightPos: { x: 0, y: 0 },
   characterPos: { x: 0, y: 0 },
+  characterPlaceholder: true,
+  activeTemplateId: 'template-default',
   canvasBorderWidth: 0,
   canvasBorderColor: '#3b82f6',
   canvasRatio: '16:9',
@@ -338,12 +356,19 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [history, future, state]);
 
-  // Preload and convert default/initial background to base64 Data URL for instant, error-free mobile export
+  // Preload and convert default/initial background and character to base64 Data URL for instant, error-free mobile export
   useEffect(() => {
     if (state.backgroundType === 'image' && state.background && !state.background.startsWith('data:')) {
       urlToDataUrl(state.background).then((dataUrl) => {
         if (dataUrl && dataUrl.startsWith('data:')) {
           updateState({ background: dataUrl }, false);
+        }
+      });
+    }
+    if (state.characterImage && !state.characterImage.startsWith('data:')) {
+      urlToDataUrl(state.characterImage).then((dataUrl) => {
+        if (dataUrl && dataUrl.startsWith('data:')) {
+          updateState({ characterImage: dataUrl }, false);
         }
       });
     }
@@ -363,13 +388,20 @@ export default function App() {
       // STEP 1: Crucial Mobile Fix - Preload and decode all images in preview container
       await preloadAllImagesInElement(previewRef.current);
 
-      // STEP 2: Ensure background image is converted to Base64 Data URL!
+      // STEP 2: Ensure background AND character images are converted to Base64 Data URL!
       // On mobile browsers (Safari/WebKit), SVG foreignObject refuses to render external HTTP/HTTPS URLs.
-      // Converting to Data URL ensures 100% full background rendering on phones!
+      // Converting to Data URL ensures 100% full background & character rendering on phones!
       if (state.backgroundType === 'image' && state.background && !state.background.startsWith('data:')) {
         const bgDataUrl = await urlToDataUrl(state.background);
         if (bgDataUrl && bgDataUrl.startsWith('data:')) {
           updateState({ background: bgDataUrl }, false);
+        }
+      }
+
+      if (state.characterImage && !state.characterImage.startsWith('data:')) {
+        const charDataUrl = await urlToDataUrl(state.characterImage);
+        if (charDataUrl && charDataUrl.startsWith('data:')) {
+          updateState({ characterImage: charDataUrl }, false);
         }
       }
 
@@ -738,6 +770,41 @@ export default function App() {
     setTimeout(() => setAutoArrangeFeedback(null), 2500);
   };
 
+  const handleApplyTemplate = async (tpl: LayoutTemplate) => {
+    const templateUpdates = tpl.apply(state);
+    
+    // Always activate characterPlaceholder if no characterImage is uploaded yet
+    const updates: Partial<ThumbnailState> = {
+      ...templateUpdates,
+      activeTemplateId: tpl.id,
+      characterPlaceholder: !state.characterImage ? true : state.characterPlaceholder,
+    };
+
+    updateState(updates, true);
+
+    // If template has an image background, convert to Data URL for reliable export
+    if (updates.background && updates.backgroundType === 'image' && !updates.background.startsWith('data:')) {
+      try {
+        const dataUrl = await urlToDataUrl(updates.background);
+        if (dataUrl && dataUrl.startsWith('data:')) {
+          updateState({ background: dataUrl }, false);
+        }
+      } catch (err) {
+        console.warn('Template BG dataUrl caching error:', err);
+      }
+    }
+
+    setAutoArrangeFeedback(`Applied "${tpl.name}" Layout`);
+    setTimeout(() => setAutoArrangeFeedback(null), 3000);
+
+    confetti({
+      particleCount: 35,
+      spread: 55,
+      origin: { y: 0.75 },
+      colors: tpl.category === 'Tech' ? ['#00f2fe', '#4facfe', '#38bdf8'] : tpl.category === 'Vibrant' ? ['#f59e0b', '#ef4444', '#facc15'] : ['#ffffff', '#60a5fa', '#a855f7']
+    });
+  };
+
   const handleSelectBackground = async (bg: BackgroundItem) => {
     // Immediate preview update
     updateState({ background: bg.url, backgroundType: 'image', selectedBgId: bg.id });
@@ -972,6 +1039,106 @@ export default function App() {
                   </div>
 
                   <div className="space-y-6 bg-zinc-900/30 p-5 rounded-2xl border border-zinc-800/50">
+                    {/* Predefined Layout Templates Library */}
+                    <div className="bg-gradient-to-b from-zinc-900/90 via-zinc-950/90 to-black p-4 rounded-2xl border border-blue-500/30 shadow-xl space-y-3.5 relative overflow-hidden">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
+                            <LayoutTemplateIcon size={16} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-xs font-black uppercase tracking-wider text-white">
+                                Layout Templates (စတိုင် ပုံစံခွက်များ)
+                              </h3>
+                              <span className="text-[8px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold">
+                                5 Presets (ပုံမှန် + 4 စတိုင်)
+                              </span>
+                            </div>
+                            <p className="text-[9px] text-zinc-400 font-medium mt-0.5">
+                              Auto-arranges text positions, font styles, colors & image placeholder
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Toggle Character/Image Placeholder */}
+                        <button
+                          type="button"
+                          onClick={() => updateState({ characterPlaceholder: !state.characterPlaceholder })}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold border transition-all ${
+                            state.characterPlaceholder
+                              ? 'bg-blue-600/20 text-blue-300 border-blue-500/40'
+                              : 'bg-zinc-900 text-zinc-500 border-zinc-800 hover:text-zinc-300'
+                          }`}
+                          title="Toggle Image Placeholder visibility"
+                        >
+                          <User size={11} />
+                          <span>{state.characterPlaceholder ? 'Placeholder ON' : 'Placeholder OFF'}</span>
+                        </button>
+                      </div>
+
+                      {/* Template Cards Grid */}
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {LAYOUT_TEMPLATES.map((tpl) => {
+                          const isSelected = state.activeTemplateId === tpl.id;
+                          return (
+                            <button
+                              key={tpl.id}
+                              type="button"
+                              onClick={() => handleApplyTemplate(tpl)}
+                              className={`group relative text-left p-3 rounded-xl border transition-all overflow-hidden flex flex-col justify-between ${
+                                isSelected
+                                  ? 'border-blue-500 bg-zinc-900/90 shadow-lg shadow-blue-500/20 ring-1 ring-blue-500/50'
+                                  : 'border-zinc-800/80 bg-zinc-950/60 hover:border-zinc-700 hover:bg-zinc-900/50'
+                              } active:scale-[0.98]`}
+                            >
+                              {/* Background Gradient Accent */}
+                              <div 
+                                className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br ${tpl.previewGradient} opacity-20 blur-xl group-hover:opacity-35 transition-opacity pointer-events-none`} 
+                              />
+
+                              {/* Top Bar: Icon + Badge */}
+                              <div className="flex items-center justify-between gap-1 mb-2 relative z-10">
+                                <div className="flex items-center gap-1.5">
+                                  {tpl.iconName === 'RotateCcw' && <RotateCcw size={13} className="text-blue-400" />}
+                                  {tpl.iconName === 'Feather' && <Feather size={13} className="text-zinc-300" />}
+                                  {tpl.iconName === 'Flame' && <Flame size={13} className="text-amber-400" />}
+                                  {tpl.iconName === 'Cpu' && <Cpu size={13} className="text-cyan-400" />}
+                                  {tpl.iconName === 'Sparkles' && <Sparkles size={13} className="text-yellow-300" />}
+                                  <span className="text-[11px] font-black text-white group-hover:text-blue-300 transition-colors">
+                                    {tpl.name}
+                                  </span>
+                                </div>
+                                {isSelected && (
+                                  <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
+                                )}
+                              </div>
+
+                              {/* Burmese Subtitle / Label */}
+                              <div className="relative z-10 space-y-1">
+                                <p className="text-[10px] font-bold text-zinc-300 line-clamp-1">
+                                  {tpl.myanmarName}
+                                </p>
+                                <p className="text-[8px] text-zinc-500 line-clamp-2 leading-tight">
+                                  {tpl.description}
+                                </p>
+                              </div>
+
+                              {/* Bottom Tag */}
+                              <div className="mt-2.5 pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[8px] font-bold relative z-10">
+                                <span className={`px-1.5 py-0.5 rounded border ${tpl.badgeColor}`}>
+                                  {tpl.badge}
+                                </span>
+                                <span className={isSelected ? 'text-blue-400 font-black' : 'text-zinc-500 group-hover:text-zinc-300'}>
+                                  {isSelected ? '✓ Active' : 'Apply →'}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     {/* Auto-Arrange Section */}
                     <div className="bg-gradient-to-b from-blue-950/40 via-zinc-900/60 to-zinc-950/80 p-4 rounded-2xl border border-blue-500/30 shadow-lg space-y-3 relative overflow-hidden">
                       <div className="flex items-center justify-between gap-2">
@@ -1011,51 +1178,110 @@ export default function App() {
                         <span>Auto-Arrange Text (Title 1, 2 & Subtitle)</span>
                       </button>
 
-                      {/* Alignment Presets */}
-                      <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80">
-                        <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
-                          Alignment:
-                        </span>
-                        <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
-                          <button
-                            type="button"
-                            onClick={() => handleAutoArrange('left')}
-                            title="Align Left (ဘယ်ဘက် ညီရန်)"
-                            className={`flex items-center gap-1 px-2.5 py-1 rounded text-[9px] font-bold uppercase transition-all ${
-                              (state.textAlignment || 'left') === 'left'
-                                ? 'bg-blue-600 text-white shadow-sm'
-                                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-                            }`}
-                          >
-                            <AlignLeft size={11} />
-                            <span>Left</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleAutoArrange('center')}
-                            title="Align Center (အလယ် ညီရန်)"
-                            className={`flex items-center gap-1 px-2.5 py-1 rounded text-[9px] font-bold uppercase transition-all ${
-                              state.textAlignment === 'center'
-                                ? 'bg-blue-600 text-white shadow-sm'
-                                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-                            }`}
-                          >
-                            <AlignCenter size={11} />
-                            <span>Center</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleAutoArrange('right')}
-                            title="Align Right (ညာဘက် ညီရန်)"
-                            className={`flex items-center gap-1 px-2.5 py-1 rounded text-[9px] font-bold uppercase transition-all ${
-                              state.textAlignment === 'right'
-                                ? 'bg-blue-600 text-white shadow-sm'
-                                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-                            }`}
-                          >
-                            <AlignRight size={11} />
-                            <span>Right</span>
-                          </button>
+                      {/* Alignment & Global Font Scale Presets */}
+                      <div className="space-y-2 pt-2 border-t border-zinc-800/80">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
+                            Alignment:
+                          </span>
+                          <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                            <button
+                              type="button"
+                              onClick={() => handleAutoArrange('left')}
+                              title="Align Left (ဘယ်ဘက် ညီရန်)"
+                              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[9px] font-bold uppercase transition-all ${
+                                (state.textAlignment || 'left') === 'left'
+                                  ? 'bg-blue-600 text-white shadow-sm'
+                                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                              }`}
+                            >
+                              <AlignLeft size={11} />
+                              <span>Left</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAutoArrange('center')}
+                              title="Align Center (အလယ် ညီရန်)"
+                              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[9px] font-bold uppercase transition-all ${
+                                state.textAlignment === 'center'
+                                  ? 'bg-blue-600 text-white shadow-sm'
+                                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                              }`}
+                            >
+                              <AlignCenter size={11} />
+                              <span>Center</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAutoArrange('right')}
+                              title="Align Right (ညာဘက် ညီရန်)"
+                              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[9px] font-bold uppercase transition-all ${
+                                state.textAlignment === 'right'
+                                  ? 'bg-blue-600 text-white shadow-sm'
+                                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                              }`}
+                            >
+                              <AlignRight size={11} />
+                              <span>Right</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Quick Text Scale All (စာလုံးအားလုံး အချိုးကျ အကြီး/အသေး ပြုလုပ်ရန်) */}
+                        <div className="flex items-center justify-between bg-zinc-950/80 p-2 rounded-xl border border-zinc-800/80">
+                          <div className="flex items-center gap-1.5 text-zinc-300">
+                            <Sliders size={12} className="text-amber-400" />
+                            <span className="text-[9px] font-bold uppercase tracking-wider">Quick Resize All (အားလုံး အကြီး/အသေး)</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateState({
+                                  titleSize: Math.max(30, Math.round(state.titleSize * 0.9)),
+                                  title2Size: Math.max(30, Math.round(state.title2Size * 0.9)),
+                                  subtitleSize: Math.max(20, Math.round((state.subtitleSize || 52) * 0.9)),
+                                  highlightSize: Math.max(16, Math.round((state.highlightSize || 40) * 0.9)),
+                                });
+                              }}
+                              className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[9px] font-bold text-zinc-300 hover:bg-zinc-800 hover:text-white active:scale-95 flex items-center gap-1"
+                              title="Scale down all text sizes by 10%"
+                            >
+                              <Minus size={10} />
+                              <span>-10%</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateState({
+                                  titleSize: 110,
+                                  title2Size: 110,
+                                  subtitleSize: 52,
+                                  highlightSize: 40,
+                                });
+                              }}
+                              className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[9px] font-bold text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                              title="Reset all font sizes to standard"
+                            >
+                              Reset
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateState({
+                                  titleSize: Math.min(260, Math.round(state.titleSize * 1.1)),
+                                  title2Size: Math.min(260, Math.round(state.title2Size * 1.1)),
+                                  subtitleSize: Math.min(160, Math.round((state.subtitleSize || 52) * 1.1)),
+                                  highlightSize: Math.min(120, Math.round((state.highlightSize || 40) * 1.1)),
+                                });
+                              }}
+                              className="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[9px] font-bold text-amber-400 hover:bg-zinc-800 hover:text-amber-300 active:scale-95 flex items-center gap-1"
+                              title="Scale up all text sizes by 10%"
+                            >
+                              <Plus size={10} />
+                              <span>+10%</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1078,19 +1304,124 @@ export default function App() {
                         className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm outline-none focus:border-blue-500 transition-all"
                         placeholder="e.g. ဓမ္မသဘင်"
                       />
-                      <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800">
-                        <div className="flex justify-between items-center mb-1.5">
-                          <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">Box Size / Padding</label>
-                          <span className="text-[10px] text-blue-400 font-mono font-bold">{state.highlightPadding}px</span>
+                      {/* Highlight Font Size & Box Size Controls */}
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {/* Font Size */}
+                        <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">Font Size</label>
+                            <span className="text-[10px] text-blue-400 font-mono font-bold">
+                              {state.highlightSize || 40}px
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => updateState({ highlightSize: Math.max(16, (state.highlightSize || 40) - 4) })}
+                              className="w-6 h-6 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:bg-zinc-800 active:scale-95 shrink-0"
+                              title="Decrease font size"
+                            >
+                              <Minus size={11} />
+                            </button>
+                            <input 
+                              type="range" 
+                              min="16" 
+                              max="120" 
+                              step="2"
+                              value={state.highlightSize || 40} 
+                              onChange={(e) => updateState({ highlightSize: parseInt(e.target.value) || 40 })} 
+                              className="w-full accent-blue-500" 
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateState({ highlightSize: Math.min(120, (state.highlightSize || 40) + 4) })}
+                              className="w-6 h-6 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:bg-zinc-800 active:scale-95 shrink-0"
+                              title="Increase font size"
+                            >
+                              <Plus size={11} />
+                            </button>
+                          </div>
+
+                          {/* Quick Presets for Highlight Size */}
+                          <div className="flex items-center justify-between pt-1 border-t border-zinc-900">
+                            {[
+                              { label: 'S', val: 28 },
+                              { label: 'M', val: 40 },
+                              { label: 'L', val: 56 },
+                              { label: 'XL', val: 72 },
+                            ].map(p => (
+                              <button
+                                key={p.label}
+                                type="button"
+                                onClick={() => updateState({ highlightSize: p.val })}
+                                className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                                  (state.highlightSize || 40) === p.val 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
+                                }`}
+                              >
+                                {p.label}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <input 
-                          type="range" 
-                          min="0" 
-                          max="40" 
-                          value={state.highlightPadding} 
-                          onChange={(e) => updateState({ highlightPadding: parseInt(e.target.value) || 0 })} 
-                          className="w-full accent-blue-500" 
-                        />
+
+                        {/* Box Padding */}
+                        <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">Padding</label>
+                            <span className="text-[10px] text-blue-400 font-mono font-bold">{state.highlightPadding}px</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => updateState({ highlightPadding: Math.max(0, state.highlightPadding - 4) })}
+                              className="w-6 h-6 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:bg-zinc-800 active:scale-95 shrink-0"
+                              title="Decrease padding"
+                            >
+                              <Minus size={11} />
+                            </button>
+                            <input 
+                              type="range" 
+                              min="0" 
+                              max="40" 
+                              value={state.highlightPadding} 
+                              onChange={(e) => updateState({ highlightPadding: parseInt(e.target.value) || 0 })} 
+                              className="w-full accent-blue-500" 
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateState({ highlightPadding: Math.min(40, state.highlightPadding + 4) })}
+                              className="w-6 h-6 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:bg-zinc-800 active:scale-95 shrink-0"
+                              title="Increase padding"
+                            >
+                              <Plus size={11} />
+                            </button>
+                          </div>
+                          {/* Quick Presets for Padding */}
+                          <div className="flex items-center justify-between pt-1 border-t border-zinc-900">
+                            {[
+                              { label: 'None', val: 0 },
+                              { label: 'Sm', val: 8 },
+                              { label: 'Med', val: 16 },
+                              { label: 'Lg', val: 28 },
+                            ].map(p => (
+                              <button
+                                key={p.label}
+                                type="button"
+                                onClick={() => updateState({ highlightPadding: p.val })}
+                                className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                                  state.highlightPadding === p.val 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
+                                }`}
+                              >
+                                {p.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
 
                       {/* Highlight Font Selector */}
@@ -1123,12 +1454,68 @@ export default function App() {
                         customFonts={customFonts}
                         onOpenCustomFontUpload={() => setActiveTab('settings')}
                       />
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
-                          <label className="text-[9px] text-zinc-600 block mb-1">SIZE</label>
-                          <input type="range" min="40" max="250" value={state.titleSize} onChange={(e) => updateState({ titleSize: parseInt(e.target.value) })} className="w-full accent-blue-500" />
+                      {/* Title 1 Size & Color controls */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">Font Size</label>
+                            <span className="text-[10px] text-blue-400 font-mono font-bold">{state.titleSize}px</span>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => updateState({ titleSize: Math.max(30, state.titleSize - 5) })}
+                              className="w-7 h-7 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:bg-zinc-800 active:scale-95 shrink-0"
+                              title="Decrease font size (-5px)"
+                            >
+                              <Minus size={12} />
+                            </button>
+                            <input 
+                              type="range" 
+                              min="30" 
+                              max="260" 
+                              step="2"
+                              value={state.titleSize} 
+                              onChange={(e) => updateState({ titleSize: parseInt(e.target.value) || 40 })} 
+                              className="w-full accent-blue-500" 
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateState({ titleSize: Math.min(260, state.titleSize + 5) })}
+                              className="w-7 h-7 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:bg-zinc-800 active:scale-95 shrink-0"
+                              title="Increase font size (+5px)"
+                            >
+                              <Plus size={12} />
+                            </button>
+                          </div>
+
+                          {/* Quick Size Presets */}
+                          <div className="flex items-center justify-between pt-1 border-t border-zinc-900">
+                            {[
+                              { label: '60', val: 60 },
+                              { label: '85', val: 85 },
+                              { label: '110', val: 110 },
+                              { label: '140', val: 140 },
+                              { label: '180', val: 180 },
+                            ].map(p => (
+                              <button
+                                key={p.label}
+                                type="button"
+                                onClick={() => updateState({ titleSize: p.val })}
+                                className={`px-2 py-0.5 rounded text-[8px] font-bold ${
+                                  state.titleSize === p.val 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
+                                }`}
+                              >
+                                {p.label}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
+
+                        <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 flex flex-col justify-between">
                           <div className="flex justify-between items-center mb-1">
                             <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">COLOR</label>
                             {state.titleGradientEnabled && (
@@ -1138,7 +1525,19 @@ export default function App() {
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <input type="color" value={state.titleColor} onChange={(e) => updateState({ titleColor: e.target.value })} className="w-full h-6 rounded border-0 cursor-pointer" />
+                            <input type="color" value={state.titleColor} onChange={(e) => updateState({ titleColor: e.target.value })} className="w-full h-8 rounded border-0 cursor-pointer" />
+                          </div>
+                          {/* Quick color dots */}
+                          <div className="flex items-center justify-between pt-1.5 border-t border-zinc-900 mt-2">
+                            {['#ffffff', '#facc15', '#ef4444', '#38bdf8', '#4ade80'].map(c => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => updateState({ titleColor: c })}
+                                className={`w-4 h-4 rounded-full border ${state.titleColor.toLowerCase() === c.toLowerCase() ? 'ring-2 ring-blue-500 scale-110 border-white' : 'border-zinc-700'}`}
+                                style={{ backgroundColor: c }}
+                              />
+                            ))}
                           </div>
                         </div>
                       </div>
@@ -1390,45 +1789,143 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Background Fill (Optional) */}
-                        <div className="pt-2 border-t border-zinc-900/80 flex items-center justify-between">
-                          <span className="text-[8px] text-zinc-400 font-bold uppercase">Background:</span>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => updateState({ titleBorderBg: 'transparent' })}
-                              className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase transition-all ${
-                                (!state.titleBorderBg || state.titleBorderBg === 'transparent') 
-                                  ? 'bg-zinc-700 text-white' 
-                                  : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
-                              }`}
-                            >
-                              None
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => updateState({ 
-                                titleBorderBg: 'rgba(0,0,0,0.7)',
-                                ...((state.titleBorderWidth || 0) === 0 ? { titleBorderWidth: 4 } : {})
-                              })}
-                              className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase transition-all ${
-                                state.titleBorderBg === 'rgba(0,0,0,0.7)' 
-                                  ? 'bg-blue-600 text-white' 
-                                  : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
-                              }`}
-                            >
-                              Dark
-                            </button>
-                            <input 
-                              type="color" 
-                              value={state.titleBorderBg && state.titleBorderBg !== 'transparent' && !state.titleBorderBg.startsWith('rgba') ? state.titleBorderBg : '#000000'}
-                              onChange={(e) => updateState({ 
-                                titleBorderBg: e.target.value,
-                                ...((state.titleBorderWidth || 0) === 0 ? { titleBorderWidth: 4 } : {})
-                              })}
-                              title="Custom Fill Color"
-                              className="w-5 h-5 rounded border border-zinc-700 cursor-pointer bg-transparent"
-                            />
+                        {/* Title Creative Shapes (စာတန်းထိုးတဲ့ ပုံစံများ - အဖြောင့်ကြီးမဟုတ်ပဲ အခြားပုံစံများ) */}
+                        <div className="pt-3 border-t border-zinc-900/80 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <Sparkles size={12} className="text-amber-400" />
+                              <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider">
+                                Title Shape & Layout Style (စာတန်းထိုး ပုံစံ)
+                              </label>
+                            </div>
+                            <span className="text-[9px] text-amber-400 font-mono font-bold uppercase">
+                              {state.titleShapeStyle || 'straight'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {[
+                              { id: 'straight', label: 'အဖြောင့် (0°)', desc: 'Straight' },
+                              { id: 'slant-up', label: 'စောင်းတက် (-3.5°)', desc: 'Slant Up' },
+                              { id: 'slant-down', label: 'စောင်းဆင်း (+3.5°)', desc: 'Slant Down' },
+                              { id: 'skew-left', label: 'ဘေးစောင်း (Skew)', desc: 'Skew Left' },
+                              { id: 'skew-right', label: 'ဘေးစောင်း (Rev)', desc: 'Skew Right' },
+                              { id: 'cinema-clip', label: 'ရုပ်ရှင်ဘောင်', desc: 'Cinema Box' },
+                              { id: 'pill', label: 'ထိပ်ဝိုင်း', desc: 'Pill Badge' },
+                              { id: 'accent-bar', label: 'ဘေးအစင်း', desc: 'Accent Bar' },
+                            ].map(shape => {
+                              const isSelected = (state.titleShapeStyle || 'straight') === shape.id;
+                              return (
+                                <button
+                                  key={shape.id}
+                                  type="button"
+                                  onClick={() => updateState({ titleShapeStyle: shape.id as any })}
+                                  className={`p-1.5 rounded-lg border text-center transition-all ${
+                                    isSelected 
+                                      ? 'bg-amber-500/20 border-amber-500 text-white shadow-sm shadow-amber-500/20' 
+                                      : 'bg-zinc-900/80 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                                  }`}
+                                >
+                                  <div className="text-[9px] font-black">{shape.label}</div>
+                                  <div className="text-[7px] text-zinc-500 uppercase">{shape.desc}</div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Title Background Presets (နောက်ခံ လှလှလေးများ) */}
+                        <div className="pt-3 border-t border-zinc-900/80 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <Palette size={12} className="text-blue-400" />
+                              <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider">
+                                Title Background (နောက်ခံ လှလှလေးများ)
+                              </label>
+                            </div>
+                            <span className="text-[9px] text-blue-400 font-mono font-bold uppercase">
+                              {state.titleBgPreset || 'none'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {[
+                              { id: 'none', label: 'ရိုးရိုး (None)', bg: 'bg-zinc-800', textColor: 'text-zinc-300' },
+                              { id: 'glass', label: 'မှန်ကြည် (Glass)', bg: 'bg-zinc-900 border border-white/20', textColor: 'text-white' },
+                              { id: 'gold', label: 'ရွှေရောင် (Gold)', bg: 'bg-gradient-to-r from-amber-500 to-yellow-600', textColor: 'text-zinc-950 font-black' },
+                              { id: 'crimson', label: 'နီရဲတောက် (Red)', bg: 'bg-gradient-to-r from-red-600 to-rose-700', textColor: 'text-white' },
+                              { id: 'emerald', label: 'မြစိမ်း (Green)', bg: 'bg-gradient-to-r from-emerald-600 to-teal-700', textColor: 'text-white' },
+                              { id: 'sapphire', label: 'နီလာပြာ (Blue)', bg: 'bg-gradient-to-r from-blue-600 to-indigo-700', textColor: 'text-white' },
+                              { id: 'purple', label: 'ခရမ်း (Purple)', bg: 'bg-gradient-to-r from-purple-600 to-fuchsia-700', textColor: 'text-white' },
+                              { id: 'white', label: 'အဖြူ (White)', bg: 'bg-white', textColor: 'text-zinc-900 font-black' },
+                            ].map(preset => {
+                              const isSelected = (state.titleBgPreset || 'none') === preset.id;
+                              return (
+                                <button
+                                  key={preset.id}
+                                  type="button"
+                                  onClick={() => {
+                                    const updates: Partial<ThumbnailState> = {
+                                      titleBgPreset: preset.id as any,
+                                      ...(preset.id === 'none' ? { titleBorderBg: 'transparent' } : {}),
+                                      ...(preset.id === 'gold' ? { titleColor: '#ffffff', titleBorderColor: '#fef08a' } : {}),
+                                      ...(preset.id === 'white' ? { titleColor: '#000000', titleBorderColor: '#e4e4e7' } : {}),
+                                    };
+                                    updateState(updates);
+                                  }}
+                                  className={`p-1.5 rounded-lg border text-center transition-all ${
+                                    isSelected 
+                                      ? 'ring-2 ring-blue-500 border-blue-400 shadow-md scale-[1.02]' 
+                                      : 'border-zinc-800 hover:border-zinc-600'
+                                  } ${preset.bg}`}
+                                >
+                                  <span className={`text-[8px] font-bold block truncate ${preset.textColor}`}>
+                                    {preset.label}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Custom Color Fill & Padding Control */}
+                          <div className="pt-2 flex items-center justify-between gap-3 text-[9px] text-zinc-400">
+                            <div className="flex items-center gap-2">
+                              <span>Custom BG:</span>
+                              <input 
+                                type="color" 
+                                value={state.titleBorderBg && state.titleBorderBg !== 'transparent' && !state.titleBorderBg.startsWith('rgba') && !state.titleBorderBg.startsWith('linear') ? state.titleBorderBg : '#000000'}
+                                onChange={(e) => updateState({ 
+                                  titleBorderBg: e.target.value,
+                                  titleBgPreset: 'custom',
+                                })}
+                                title="Custom Fill Color"
+                                className="w-6 h-6 rounded border border-zinc-700 cursor-pointer bg-transparent"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span>Padding:</span>
+                              <button
+                                type="button"
+                                onClick={() => updateState({ titleBgPaddingX: 16, titleBgPaddingY: 6 })}
+                                className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[8px] hover:bg-zinc-800"
+                              >
+                                Compact
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateState({ titleBgPaddingX: 28, titleBgPaddingY: 12 })}
+                                className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[8px] hover:bg-zinc-800"
+                              >
+                                Standard
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateState({ titleBgPaddingX: 42, titleBgPaddingY: 18 })}
+                                className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[8px] hover:bg-zinc-800"
+                              >
+                                Wide
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1453,13 +1950,74 @@ export default function App() {
                         onOpenCustomFontUpload={() => setActiveTab('settings')}
                       />
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
-                          <label className="text-[9px] text-zinc-600 block mb-1">SIZE</label>
-                          <input type="range" min="40" max="250" value={state.title2Size} onChange={(e) => updateState({ title2Size: parseInt(e.target.value) })} className="w-full accent-blue-500" />
+                      {/* Title 2 Size & Controls */}
+                      <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">Font Size</label>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-blue-400 font-mono font-bold">{state.title2Size}px</span>
+                            {state.title2 && (
+                              <button 
+                                type="button"
+                                onClick={() => updateState({ title2: '' })} 
+                                className="text-[9px] font-bold text-red-500 hover:text-red-400 uppercase"
+                              >
+                                Clear
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800 flex items-center justify-center">
-                          <button onClick={() => updateState({ title2: '' })} className="text-[9px] font-bold text-red-500 uppercase hover:bg-red-500/10 px-2 py-1 rounded">Clear</button>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => updateState({ title2Size: Math.max(30, state.title2Size - 5) })}
+                            className="w-7 h-7 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:bg-zinc-800 active:scale-95 shrink-0"
+                            title="Decrease font size (-5px)"
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <input 
+                            type="range" 
+                            min="30" 
+                            max="260" 
+                            step="2"
+                            value={state.title2Size} 
+                            onChange={(e) => updateState({ title2Size: parseInt(e.target.value) })} 
+                            className="w-full accent-blue-500" 
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateState({ title2Size: Math.min(260, state.title2Size + 5) })}
+                            className="w-7 h-7 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:bg-zinc-800 active:scale-95 shrink-0"
+                            title="Increase font size (+5px)"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+
+                        {/* Quick Presets for Title 2 Size */}
+                        <div className="flex items-center justify-between pt-1 border-t border-zinc-900">
+                          {[
+                            { label: '60', val: 60 },
+                            { label: '85', val: 85 },
+                            { label: '110', val: 110 },
+                            { label: '140', val: 140 },
+                            { label: '180', val: 180 },
+                          ].map(p => (
+                            <button
+                              key={p.label}
+                              type="button"
+                              onClick={() => updateState({ title2Size: p.val })}
+                              className={`px-2 py-0.5 rounded text-[8px] font-bold ${
+                                state.title2Size === p.val 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
+                              }`}
+                            >
+                              {p.label}
+                            </button>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -1485,6 +2043,91 @@ export default function App() {
                         placeholder="e.g. ဆရာတော် ဘွဲ့အမည်"
                       />
 
+                      {/* Subtitle Font Size & Color Controls */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">Font Size</label>
+                            <span className="text-[10px] text-blue-400 font-mono font-bold">{state.subtitleSize || 52}px</span>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => updateState({ subtitleSize: Math.max(20, (state.subtitleSize || 52) - 4) })}
+                              className="w-7 h-7 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:bg-zinc-800 active:scale-95 shrink-0"
+                              title="Decrease font size (-4px)"
+                            >
+                              <Minus size={12} />
+                            </button>
+                            <input 
+                              type="range" 
+                              min="20" 
+                              max="160" 
+                              step="2"
+                              value={state.subtitleSize || 52} 
+                              onChange={(e) => updateState({ subtitleSize: parseInt(e.target.value) || 52 })} 
+                              className="w-full accent-blue-500" 
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateState({ subtitleSize: Math.min(160, (state.subtitleSize || 52) + 4) })}
+                              className="w-7 h-7 rounded bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 hover:bg-zinc-800 active:scale-95 shrink-0"
+                              title="Increase font size (+4px)"
+                            >
+                              <Plus size={12} />
+                            </button>
+                          </div>
+
+                          {/* Quick Presets for Subtitle Size */}
+                          <div className="flex items-center justify-between pt-1 border-t border-zinc-900">
+                            {[
+                              { label: '36', val: 36 },
+                              { label: '44', val: 44 },
+                              { label: '52', val: 52 },
+                              { label: '64', val: 64 },
+                              { label: '80', val: 80 },
+                            ].map(p => (
+                              <button
+                                key={p.label}
+                                type="button"
+                                onClick={() => updateState({ subtitleSize: p.val })}
+                                className={`px-2 py-0.5 rounded text-[8px] font-bold ${
+                                  (state.subtitleSize || 52) === p.val 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
+                                }`}
+                              >
+                                {p.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 flex flex-col justify-between">
+                          <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider mb-1">Text Color</label>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="color" 
+                              value={state.subtitleColor} 
+                              onChange={(e) => updateState({ subtitleColor: e.target.value })} 
+                              className="w-full h-8 rounded border-0 cursor-pointer" 
+                            />
+                          </div>
+                          <div className="flex items-center justify-between pt-1.5 border-t border-zinc-900 mt-2">
+                            {['#ffffff', '#facc15', '#f87171', '#38bdf8', '#4ade80'].map(c => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => updateState({ subtitleColor: c })}
+                                className={`w-4 h-4 rounded-full border ${state.subtitleColor.toLowerCase() === c.toLowerCase() ? 'ring-2 ring-blue-500 scale-110 border-white' : 'border-zinc-700'}`}
+                                style={{ backgroundColor: c }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Subtitle Font Selector */}
                       <FontSelector
                         label="Subtitle Font (ဆရာတော်ဘွဲ့အမည်/စာတန်း ဖောင့်)"
@@ -1495,9 +2138,41 @@ export default function App() {
                       />
 
                       {state.subtitleBgEnabled && (
-                        <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800">
-                          <label className="text-[9px] text-zinc-600 block mb-2">BG COLOR</label>
-                          <input type="color" value={state.subtitleBg} onChange={(e) => updateState({ subtitleBg: e.target.value })} className="w-full h-8 rounded border-0 cursor-pointer" />
+                        <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase">
+                              Subtitle Background Presets (နောက်ခံ ရွေးချယ်ရန်)
+                            </label>
+                            <input 
+                              type="color" 
+                              value={state.subtitleBg.startsWith('rgba') || state.subtitleBg.startsWith('linear') ? '#000000' : state.subtitleBg} 
+                              onChange={(e) => updateState({ subtitleBg: e.target.value })} 
+                              title="Custom Color"
+                              className="w-6 h-6 rounded border border-zinc-700 cursor-pointer bg-transparent" 
+                            />
+                          </div>
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {[
+                              { label: 'Dark Glass', bg: 'rgba(0,0,0,0.75)', text: '#ffffff' },
+                              { label: 'Gold', bg: 'linear-gradient(135deg, #d97706, #78350f)', text: '#ffffff' },
+                              { label: 'Crimson', bg: 'linear-gradient(135deg, #dc2626, #7f1d1d)', text: '#ffffff' },
+                              { label: 'Emerald', bg: 'linear-gradient(135deg, #059669, #064e3b)', text: '#ffffff' },
+                              { label: 'Sapphire', bg: 'linear-gradient(135deg, #2563eb, #1e3a8a)', text: '#ffffff' },
+                              { label: 'Purple', bg: 'linear-gradient(135deg, #7c3aed, #4c1d95)', text: '#ffffff' },
+                              { label: 'White Box', bg: '#ffffff', text: '#000000' },
+                              { label: 'Solid Black', bg: '#000000', text: '#facc15' },
+                            ].map(p => (
+                              <button
+                                key={p.label}
+                                type="button"
+                                onClick={() => updateState({ subtitleBg: p.bg, subtitleColor: p.text })}
+                                className="px-1.5 py-1 rounded-md text-[8px] font-bold border border-zinc-700/60 truncate transition-all hover:scale-105"
+                                style={{ background: p.bg, color: p.text }}
+                              >
+                                {p.label}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1988,18 +2663,39 @@ export default function App() {
                   <div className="bg-zinc-900/30 p-5 rounded-2xl border border-zinc-800/50 space-y-6">
                     <div className="grid grid-cols-1 gap-3">
                       {!state.characterImage ? (
-                        <button 
-                          onClick={() => document.getElementById('char-upload')?.click()}
-                          className="flex flex-col items-center justify-center gap-3 p-10 bg-zinc-950/50 border-2 border-dashed border-zinc-800 rounded-2xl hover:border-blue-500 hover:bg-blue-500/5 transition-all group"
-                        >
-                          <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <ImageIcon size={24} className="text-zinc-500" />
+                        <div className="space-y-3">
+                          <button 
+                            onClick={() => document.getElementById('char-upload')?.click()}
+                            className="w-full flex flex-col items-center justify-center gap-3 p-8 bg-zinc-950/50 border-2 border-dashed border-zinc-800 rounded-2xl hover:border-blue-500 hover:bg-blue-500/5 transition-all group"
+                          >
+                            <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                              <ImageIcon size={24} className="text-zinc-500" />
+                            </div>
+                            <div className="text-center">
+                              <div className="text-xs font-black uppercase tracking-widest text-white">Upload Person / Speaker (ပုံတင်ရန်)</div>
+                              <div className="text-[9px] text-zinc-500 mt-1">PNG, JPG or WebP with automatic background removal</div>
+                            </div>
+                          </button>
+
+                          {/* Placeholder switch */}
+                          <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800/80 flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] font-bold text-white block">Image Placeholder on Canvas</span>
+                              <span className="text-[9px] text-zinc-400">လူပုံမထည့်မီ ပုံစံခွက်နေရာပြကွက် ပြသမည်</span>
+                            </div>
+                            <button 
+                              type="button"
+                              onClick={() => updateState({ characterPlaceholder: !state.characterPlaceholder })}
+                              className={`px-3 py-1 rounded-full text-[9px] font-bold border transition-all ${
+                                state.characterPlaceholder 
+                                  ? 'bg-blue-600/20 text-blue-300 border-blue-500/50' 
+                                  : 'bg-zinc-900 text-zinc-500 border-zinc-800'
+                              }`}
+                            >
+                              {state.characterPlaceholder ? 'ON (ပြသနေသည်)' : 'OFF (ပိတ်ထားသည်)'}
+                            </button>
                           </div>
-                          <div className="text-center">
-                            <div className="text-xs font-black uppercase tracking-widest">Upload Person</div>
-                            <div className="text-[9px] text-zinc-600 mt-1 uppercase">PNG preferred</div>
-                          </div>
-                        </button>
+                        </div>
                       ) : (
                         <div className="space-y-4">
                           <div className="relative aspect-square bg-zinc-950 rounded-2xl border border-zinc-800 overflow-hidden group">
