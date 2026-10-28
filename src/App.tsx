@@ -55,7 +55,7 @@ import {
   Feather,
   LayoutTemplate as LayoutTemplateIcon
 } from 'lucide-react';
-import { LAYOUT_TEMPLATES, LayoutTemplate } from './data/layoutTemplates';
+import { LAYOUT_TEMPLATES, LayoutTemplate, TEMPLATE_CATEGORIES } from './data/layoutTemplates';
 import { LiveUsersBadge } from './components/LiveUsersBadge';
 import {
   CustomFontRecord,
@@ -717,6 +717,10 @@ export default function App() {
   };
 
   const [autoArrangeFeedback, setAutoArrangeFeedback] = useState<string | null>(null);
+  const [tplCategory, setTplCategory] = useState<'All' | LayoutTemplate['category']>('All');
+  const visibleTemplates = tplCategory === 'All'
+    ? LAYOUT_TEMPLATES
+    : LAYOUT_TEMPLATES.filter(t => t.category === tplCategory);
 
   const handleAutoArrange = (forcedAlign?: 'left' | 'center' | 'right') => {
     const ratio = state.canvasRatio || '16:9';
@@ -1054,7 +1058,7 @@ export default function App() {
                                 Layout Templates (စတိုင် ပုံစံခွက်များ)
                               </h3>
                               <span className="text-[8px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold">
-                                5 Presets (ပုံမှန် + 4 စတိုင်)
+                                {LAYOUT_TEMPLATES.length} Presets
                               </span>
                             </div>
                             <p className="text-[9px] text-zinc-400 font-medium mt-0.5">
@@ -1079,9 +1083,32 @@ export default function App() {
                         </button>
                       </div>
 
+                      {/* Category filter */}
+                      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+                        {(['All', ...TEMPLATE_CATEGORIES] as const).map((cat) => {
+                          const count = cat === 'All'
+                            ? LAYOUT_TEMPLATES.length
+                            : LAYOUT_TEMPLATES.filter(t => t.category === cat).length;
+                          return (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => setTplCategory(cat)}
+                              className={`shrink-0 px-2.5 py-1 rounded-full text-[9px] font-bold border transition-all ${
+                                tplCategory === cat
+                                  ? 'bg-blue-600/30 text-blue-200 border-blue-500/60'
+                                  : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                              }`}
+                            >
+                              {cat} ({count})
+                            </button>
+                          );
+                        })}
+                      </div>
+
                       {/* Template Cards Grid */}
-                      <div className="grid grid-cols-2 gap-2.5">
-                        {LAYOUT_TEMPLATES.map((tpl) => {
+                      <div className="grid grid-cols-2 gap-2.5 max-h-[560px] overflow-y-auto pr-1">
+                        {visibleTemplates.map((tpl) => {
                           const isSelected = state.activeTemplateId === tpl.id;
                           return (
                             <button

@@ -1,5 +1,6 @@
 import { ThumbnailState } from '../types';
 import { BUILTIN_BACKGROUNDS } from './backgrounds';
+import { GENERATED_TEMPLATES } from './templateLibrary';
 
 export interface LayoutTemplate {
   id: string;
@@ -8,7 +9,17 @@ export interface LayoutTemplate {
   description: string;
   badge: string;
   badgeColor: string;
-  category: 'Default' | 'Minimalist' | 'Vibrant' | 'Tech' | 'Dramatic';
+  category:
+    | 'Default'
+    | 'Minimalist'
+    | 'Vibrant'
+    | 'Tech'
+    | 'Dramatic'
+    | 'Dhamma'
+    | 'Business'
+    | 'Nature'
+    | 'Neon'
+    | 'Pastel';
   previewGradient: string;
   iconName: 'Sparkles' | 'Flame' | 'Cpu' | 'Feather' | 'RotateCcw';
   apply: (currentState: ThumbnailState) => Partial<ThumbnailState>;
@@ -20,7 +31,7 @@ const getBg = (id: string, fallback: string) => {
   return found ? found.url : fallback;
 };
 
-export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
+const CORE_TEMPLATES: LayoutTemplate[] = [
   {
     id: 'template-default',
     name: 'Default / Normal',
@@ -358,4 +369,33 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
       canvasBorderColor: '#eab308',
     }),
   },
+];
+
+// The core templates never reset the title box colour, so switching away from a
+// "Slant Box" style template would leave its coloured box behind. Reset it here.
+const withResets = (tpl: LayoutTemplate): LayoutTemplate => ({
+  ...tpl,
+  apply: (currentState) => ({
+    titleBorderBg: 'transparent',
+    titleRotation: 0,
+    ...tpl.apply(currentState),
+  }),
+});
+
+export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
+  ...CORE_TEMPLATES.map(withResets),
+  ...GENERATED_TEMPLATES,
+];
+
+export const TEMPLATE_CATEGORIES: LayoutTemplate['category'][] = [
+  'Default',
+  'Minimalist',
+  'Vibrant',
+  'Tech',
+  'Dramatic',
+  'Dhamma',
+  'Business',
+  'Nature',
+  'Neon',
+  'Pastel',
 ];
