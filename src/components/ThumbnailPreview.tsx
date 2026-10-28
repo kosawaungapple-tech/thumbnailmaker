@@ -176,37 +176,37 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
       case 'glass':
         background = 'rgba(0, 0, 0, 0.72)';
         border = border === 'none' ? '2px solid rgba(255, 255, 255, 0.25)' : border;
-        boxShadow = '0 20px 40px rgba(0, 0, 0, 0.6)';
+        boxShadow = 'none';
         break;
       case 'gold':
         background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #78350f 100%)';
         border = border === 'none' ? '3px solid #fef08a' : border;
-        boxShadow = '0 15px 35px rgba(245, 158, 11, 0.4)';
+        boxShadow = 'none';
         break;
       case 'crimson':
         background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #991b1b 100%)';
         border = border === 'none' ? '3px solid #fca5a5' : border;
-        boxShadow = '0 15px 35px rgba(239, 68, 68, 0.4)';
+        boxShadow = 'none';
         break;
       case 'emerald':
         background = 'linear-gradient(135deg, #10b981 0%, #059669 50%, #064e3b 100%)';
         border = border === 'none' ? '3px solid #6ee7b7' : border;
-        boxShadow = '0 15px 35px rgba(16, 185, 129, 0.4)';
+        boxShadow = 'none';
         break;
       case 'sapphire':
         background = 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 50%, #1e1b4b 100%)';
         border = border === 'none' ? '3px solid #93c5fd' : border;
-        boxShadow = '0 15px 35px rgba(59, 130, 246, 0.4)';
+        boxShadow = 'none';
         break;
       case 'purple':
         background = 'linear-gradient(135deg, #a855f7 0%, #7c3aed 50%, #4c1d95 100%)';
         border = border === 'none' ? '3px solid #e9d5ff' : border;
-        boxShadow = '0 15px 35px rgba(168, 85, 247, 0.4)';
+        boxShadow = 'none';
         break;
       case 'white':
         background = '#ffffff';
         border = border === 'none' ? '3px solid #e4e4e7' : border;
-        boxShadow = '0 15px 35px rgba(0, 0, 0, 0.3)';
+        boxShadow = 'none';
         break;
       case 'custom':
         background = state.titleBorderBg || '#000000';
@@ -242,7 +242,7 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
       case 'accent-bar':
         border = 'none';
         borderRadius = '8px';
-        boxShadow = `-10px 0 0 0 ${state.titleBorderColor || '#3b82f6'}, 0 15px 30px rgba(0,0,0,0.5)`;
+        boxShadow = `-10px 0 0 0 ${state.titleBorderColor || '#3b82f6'}`;
         break;
       default:
         break;

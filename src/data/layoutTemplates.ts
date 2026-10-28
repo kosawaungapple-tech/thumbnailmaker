@@ -17,9 +17,10 @@ export interface LayoutTemplate {
     | 'Dramatic'
     | 'Dhamma'
     | 'Business'
-    | 'Nature'
     | 'Neon'
-    | 'Pastel';
+    | 'Pastel'
+    | 'Retro'
+    | 'Layout';
   previewGradient: string;
   iconName: 'Sparkles' | 'Flame' | 'Cpu' | 'Feather' | 'RotateCcw';
   apply: (currentState: ThumbnailState) => Partial<ThumbnailState>;
@@ -395,7 +396,8 @@ export const TEMPLATE_CATEGORIES: LayoutTemplate['category'][] = [
   'Dramatic',
   'Dhamma',
   'Business',
-  'Nature',
   'Neon',
   'Pastel',
+  'Retro',
+  'Layout',
 ];

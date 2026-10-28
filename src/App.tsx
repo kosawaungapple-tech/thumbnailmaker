@@ -57,6 +57,7 @@ import {
 } from 'lucide-react';
 import { LAYOUT_TEMPLATES, LayoutTemplate, TEMPLATE_CATEGORIES } from './data/layoutTemplates';
 import { LiveUsersBadge } from './components/LiveUsersBadge';
+import { TemplateMiniPreview } from './components/TemplateMiniPreview';
 import {
   CustomFontRecord,
   loadAndRegisterStoredFonts,
@@ -718,6 +719,13 @@ export default function App() {
 
   const [autoArrangeFeedback, setAutoArrangeFeedback] = useState<string | null>(null);
   const [tplCategory, setTplCategory] = useState<'All' | LayoutTemplate['category']>('All');
+  const templatePreviews = React.useMemo(
+    () =>
+      Object.fromEntries(
+        LAYOUT_TEMPLATES.map(t => [t.id, t.apply({ canvasRatio: '16:9' } as ThumbnailState)])
+      ) as Record<string, Partial<ThumbnailState>>,
+    []
+  );
   const visibleTemplates = tplCategory === 'All'
     ? LAYOUT_TEMPLATES
     : LAYOUT_TEMPLATES.filter(t => t.category === tplCategory);
@@ -1115,46 +1123,37 @@ export default function App() {
                               key={tpl.id}
                               type="button"
                               onClick={() => handleApplyTemplate(tpl)}
-                              className={`group relative text-left p-3 rounded-xl border transition-all overflow-hidden flex flex-col justify-between ${
+                              className={`group relative text-left p-2 rounded-xl border transition-all overflow-hidden flex flex-col justify-between ${
                                 isSelected
                                   ? 'border-blue-500 bg-zinc-900/90 shadow-lg shadow-blue-500/20 ring-1 ring-blue-500/50'
                                   : 'border-zinc-800/80 bg-zinc-950/60 hover:border-zinc-700 hover:bg-zinc-900/50'
                               } active:scale-[0.98]`}
                             >
-                              {/* Background Gradient Accent */}
-                              <div 
-                                className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br ${tpl.previewGradient} opacity-20 blur-xl group-hover:opacity-35 transition-opacity pointer-events-none`} 
-                              />
-
-                              {/* Top Bar: Icon + Badge */}
-                              <div className="flex items-center justify-between gap-1 mb-2 relative z-10">
-                                <div className="flex items-center gap-1.5">
-                                  {tpl.iconName === 'RotateCcw' && <RotateCcw size={13} className="text-blue-400" />}
-                                  {tpl.iconName === 'Feather' && <Feather size={13} className="text-zinc-300" />}
-                                  {tpl.iconName === 'Flame' && <Flame size={13} className="text-amber-400" />}
-                                  {tpl.iconName === 'Cpu' && <Cpu size={13} className="text-cyan-400" />}
-                                  {tpl.iconName === 'Sparkles' && <Sparkles size={13} className="text-yellow-300" />}
-                                  <span className="text-[11px] font-black text-white group-hover:text-blue-300 transition-colors">
-                                    {tpl.name}
-                                  </span>
-                                </div>
-                                {isSelected && (
-                                  <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
-                                )}
+                              {/* Live mini preview of the template */}
+                              <div className={`mb-2 relative z-10 rounded-md overflow-hidden ring-1 ${isSelected ? 'ring-blue-500/60' : 'ring-zinc-800'}`}>
+                                <TemplateMiniPreview u={templatePreviews[tpl.id]} />
                               </div>
 
-                              {/* Burmese Subtitle / Label */}
-                              <div className="relative z-10 space-y-1">
+                              {/* Name + Burmese label */}
+                              <div className="relative z-10 space-y-0.5">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="text-[11px] font-black text-white group-hover:text-blue-300 transition-colors line-clamp-1">
+                                    {tpl.name}
+                                  </span>
+                                  {isSelected && (
+                                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
+                                  )}
+                                </div>
                                 <p className="text-[10px] font-bold text-zinc-300 line-clamp-1">
                                   {tpl.myanmarName}
                                 </p>
-                                <p className="text-[8px] text-zinc-500 line-clamp-2 leading-tight">
+                                <p className="text-[8px] text-zinc-500 line-clamp-1 leading-tight">
                                   {tpl.description}
                                 </p>
                               </div>
 
                               {/* Bottom Tag */}
-                              <div className="mt-2.5 pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[8px] font-bold relative z-10">
+                              <div className="mt-2 pt-1.5 border-t border-zinc-800/60 flex items-center justify-between text-[8px] font-bold relative z-10">
                                 <span className={`px-1.5 py-0.5 rounded border ${tpl.badgeColor}`}>
                                   {tpl.badge}
                                 </span>
