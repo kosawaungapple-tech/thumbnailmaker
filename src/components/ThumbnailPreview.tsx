@@ -666,7 +666,6 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                   fontWeight: '900',
                   fontFamily: state.highlightFont || state.fontFamily || state.titleFont,
                   borderRadius: '10px',
-                  boxShadow: '0 15px 30px -10px rgba(0,0,0,0.5)',
                   cursor: 'grab',
                   userSelect: 'none',
                   touchAction: 'none',
