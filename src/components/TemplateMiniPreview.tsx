@@ -143,7 +143,7 @@ export const TemplateMiniPreview: React.FC<Props> = ({ u }) => {
             fontFamily: u.subtitleFont,
           }}
         >
-          ဆရာတော် ဘွဲ့အမည်
+          ပါချုပ်ဆရာတော်
         </div>
       </div>
 

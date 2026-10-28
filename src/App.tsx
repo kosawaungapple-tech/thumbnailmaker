@@ -84,7 +84,7 @@ const DEFAULT_ENGLISH_FONTS: FontConfig[] = [
 const INITIAL_STATE: ThumbnailState = {
   title: 'တရားတော် ခေါင်းစဉ်',
   title2: '',
-  subtitle: 'ဆရာတော် ဘွဲ့အမည်',
+  subtitle: 'ပါချုပ်ဆရာတော်',
   highlight: 'ဓမ္မသဘင်',
   idea: '',
   background: BUILTIN_BACKGROUNDS[0].url,
