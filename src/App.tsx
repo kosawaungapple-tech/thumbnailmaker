@@ -8,7 +8,7 @@ import { ThumbnailPreview } from './components/ThumbnailPreview';
 import { ThumbnailState, FontConfig, ThemeType } from './types';
 import { toPng } from 'html-to-image';
 import confetti from 'canvas-confetti';
-import { removeBackground } from '@imgly/background-removal';
+import { removeBgFast, preloadBgModel } from './utils/removeBg';
 import { BUILTIN_BACKGROUNDS, BackgroundItem } from './data/backgrounds';
 import { urlToDataUrl, processUploadedFile, preloadAllImagesInElement } from './utils/imageUtils';
 import { 
@@ -261,6 +261,7 @@ export default function App() {
   const [future, setFuture] = useState<ThumbnailState[]>([]);
   const [isExporting, setIsExporting] = useState(false);
   const [isRemovingBg, setIsRemovingBg] = useState(false);
+  const [bgRemoveProgress, setBgRemoveProgress] = useState(0);
   const [activeTab, setActiveTab] = useState<'content' | 'character' | 'style' | 'border' | 'settings'>('content');
   const previewRef = useRef<HTMLDivElement>(null);
 
@@ -679,13 +680,10 @@ export default function App() {
   const handleRemoveBg = async () => {
     if (!state.characterImage) return;
     setIsRemovingBg(true);
+    setBgRemoveProgress(0);
     try {
-      const blob = await removeBackground(state.characterImage);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        updateState({ characterImage: e.target?.result as string });
-      };
-      reader.readAsDataURL(blob);
+      const dataUrl = await removeBgFast(state.characterImage, setBgRemoveProgress);
+      updateState({ characterImage: dataUrl });
     } catch (err) {
       console.error('BG Removal failed', err);
       alert('Background removal failed. Please try a clearer image.');
@@ -841,6 +839,7 @@ export default function App() {
           updateState({ background: optimizedDataUrl, backgroundType: 'image', selectedBgId: undefined });
         } else {
           updateState({ characterImage: optimizedDataUrl });
+          preloadBgModel(); // warm up the model while the user is still editing
         }
       } catch (err) {
         console.warn('Image optimization failed, falling back to FileReader:', err);
@@ -2743,7 +2742,9 @@ export default function App() {
                             className="w-full flex items-center justify-center gap-2 p-3 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-50"
                           >
                             {isRemovingBg ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
-                            {isRemovingBg ? 'Processing...' : 'Remove Background'}
+                            {isRemovingBg
+                              ? (bgRemoveProgress > 0 && bgRemoveProgress < 100 ? `Loading model ${bgRemoveProgress}%` : 'Processing...')
+                              : 'Remove Background'}
                           </button>
                         </div>
                       )}

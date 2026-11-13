@@ -61,6 +61,21 @@ export default defineConfig(() => {
               },
             },
             {
+              // Background-removal model + wasm files: cache so repeat use is instant
+              urlPattern: /^https:\/\/staticimgly\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'bg-removal-model-cache',
+                expiration: {
+                  maxEntries: 30,
+                  maxAgeSeconds: 60 * 60 * 24 * 90,
+                },
+                cacheableResponse: {
+                  statuses: [200],
+                },
+              },
+            },
+            {
               urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
               handler: 'CacheFirst',
               options: {
