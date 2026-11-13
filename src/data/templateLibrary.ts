@@ -263,7 +263,7 @@ const mk = (id: string, name: string, my: string, cat: Category, bg: Bg, o: Opts
 };
 
 // ---------------------------------------------------------------------------
-// 96 hand-designed templates
+// 109 hand-designed templates
 // ---------------------------------------------------------------------------
 export const GENERATED_TEMPLATES: LayoutTemplate[] = [
   // ===================== Dhamma (20) =====================
@@ -642,5 +642,65 @@ export const GENERATED_TEMPLATES: LayoutTemplate[] = [
   }),
   mk('ly-big-subtitle', 'Big Subtitle', 'ဆရာတော်အမည်ကြီး', 'Layout', css('linear-gradient(135deg,#1e293b,#020617)'), {
     titleColor: '#ffffff', ...outline(0, '#000000', 5, 12), ...hl('#38bdf8', '#082f49'), ...sub('#082f49', '#38bdf8'), ss: 72, ts: 92, sp: [0, 20],
+  }),
+
+  // ===================== New additions (10) =====================
+  mk('dh-golden-lotus-night', 'Golden Lotus Night', 'ရွှေကြာ ညဘက်', 'Dhamma', css('radial-gradient(circle at 50% 100%, rgba(251,191,36,0.55), transparent 55%), linear-gradient(180deg,#1c0a02,#451a03)'), {
+    textAlignment: 'center', ...grad('#fef9c3', '#f59e0b'), ...outline(2, '#1c0a02', 6, 14),
+    ...box('rgba(0,0,0,0.4)', 2, '#fbbf24', 9999, 38, 12, 'pill'), ...hl('linear-gradient(135deg,#fbbf24,#b45309)', '#1c0a02', 20),
+    ...sub('#fde68a'), ...char('circle', '#fbbf24', '#f59e0b'), ts: 104,
+  }),
+  mk('dh-pagoda-dusk', 'Pagoda Dusk', 'စေတီ ညနေခင်း', 'Dhamma', css('linear-gradient(180deg,#1e1b4b 0%,#9a3412 70%,#fbbf24 100%)'), {
+    textAlignment: 'center', titleColor: '#fff7ed', ...outline(0, '#000000', 6, 16), ...hl('#fbbf24', '#431407', 20),
+    ...sub('#fed7aa', 'rgba(30,27,75,0.6)'), ...char('circle', '#fde68a', '#f59e0b'), font: 'padauk', ts: 108,
+  }),
+  mk('dh-merit-gold', 'Merit Gold', 'ကုသိုလ်ရွှေ', 'Dhamma', img('offline-spiritual-golden'), {
+    titleColor: '#ffffff', ...outline(4, '#451a03', 6, 12), ...box('rgba(69,26,3,0.6)', 2, '#fbbf24', 14, 30, 12),
+    ...hl('#fbbf24', '#451a03'), ...sub('#fef3c7', 'rgba(24,9,2,0.75)'), ...frame(8, '#fbbf24'), font: 'padauk', ts: 100,
+  }),
+  mk('yt-lime-shock', 'Lime Shock', 'သံပုရာစိမ်း ထိတ်လန့်', 'Vibrant', solid('#0a0a0a'), {
+    textAlignment: 'center', titleColor: '#a3e635', ...outline(6, '#000000', 8, 0), titleRotation: -2, ...hl('#a3e635', '#000000'),
+    ...sub('#ffffff'), ...frame(10, '#a3e635'), ts: 120,
+  }),
+  mk('yt-sky-burst', 'Sky Burst', 'ကောင်းကင် ပေါက်ကွဲ', 'Vibrant', css(rays('70% 50%', '#38bdf8', '#0ea5e9', 8)), {
+    textAlignment: 'center', titleColor: '#ffffff', ...outline(9, '#0c4a6e', 8, 0), ...hl('#fde047', '#000000'),
+    ...sub('#0c4a6e', 'rgba(255,255,255,0.85)'), ts: 120,
+  }),
+  mk('yt-pink-bang', 'Pink Bang', 'ပန်းရောင် ဘန်း', 'Vibrant', css('linear-gradient(135deg,#ec4899,#f97316)'), {
+    titleColor: '#ffffff', ...outline(8, '#831843', 8, 0), titleRotation: 3, ...hl('#ffffff', '#be185d'),
+    ...sub('#ffffff', '#831843'), ts: 118,
+  }),
+  mk('bz-midnight-gold', 'Midnight Gold', 'သန်းခေါင် ရွှေ', 'Business', css('linear-gradient(135deg,#020617,#1e293b)'), {
+    textAlignment: 'left', ...grad('#fef3c7', '#fbbf24'), ...outline(0, '#000000', 4, 10), ...hl('#fbbf24', '#020617', 20),
+    ...sub('#cbd5e1'), ...frame(6, '#fbbf24'), ts: 100,
+  }),
+  mk('bz-news-flash', 'News Flash', 'သတင်းပို့ ချက်ချင်း', 'Business', css('linear-gradient(135deg,#0f172a,#1e293b)'), {
+    titleColor: '#ffffff', ...box('#dc2626', 0, '#ffffff', 0, 30, 12), ...outline(0, '#000000', 0, 0), ...hl('#ffffff', '#dc2626', 20),
+    ...sub('#ffffff', 'rgba(220,38,38,0.85)'), hs: 44, ts: 98,
+  }),
+  mk('te-grid-violet', 'Grid Violet', 'ဇယားကွက် ခရမ်း', 'Tech', css(grid('rgba(168,85,247,0.18)', '#0b0220', 36)), {
+    titleColor: '#f5d0fe', ...box('rgba(88,28,135,0.45)', 2, '#c084fc', 6, 32, 12), ...outline(0, '#000000', 0, 0),
+    ...hl('#c084fc', '#2e1065'), ...sub('#e9d5ff'), ts: 100,
+  }),
+  mk('ne-cyber-yellow', 'Cyber Yellow', 'ဆိုက်ဘာ အဝါ', 'Neon', css('linear-gradient(135deg,#000000,#1c1917)'), {
+    textAlignment: 'center', ...grad('#fef08a', '#facc15'), ...outline(3, '#000000', 0, 0), ...hl('#facc15', '#000000'),
+    ...sub('#fde68a'), ...frame(5, '#facc15'), ts: 114,
+  }),
+
+  // ===================== Glass panel + photo left (3) =====================
+  mk('gl-lake-sunset', 'Glass Lake Sunset', 'မှန်ကြည် ရေကန်နေဝင်', 'Dhamma', img('offline-sunset-horizon'), {
+    textAlignment: 'center', titleColor: '#ffffff', ...outline(7, '#000000', 4, 0),
+    ...box('rgba(255,255,255,0.2)', 2, 'rgba(255,255,255,0.55)', 44, 44, 26), ...hl('rgba(110,95,75,0.75)', '#ffffff', 14),
+    ...sub('#ffffff'), ...char('square', '#1e293b', undefined, 0), charLeft: true, hp: [520, -270], hs: 30, font: 'padauk', ts: 100,
+  }),
+  mk('gl-aurora-calm', 'Glass Aurora', 'မှန်ကြည် အော်ရိုရာ', 'Dhamma', img('offline-aurora-purple'), {
+    textAlignment: 'center', titleColor: '#ffffff', ...outline(7, '#1e1b4b', 4, 0),
+    ...box('rgba(255,255,255,0.16)', 2, 'rgba(255,255,255,0.5)', 44, 44, 26), ...hl('rgba(30,27,75,0.7)', '#ffffff', 14),
+    ...sub('#ffffff'), ...char('square', '#312e81', undefined, 0), charLeft: true, hp: [520, -270], hs: 30, font: 'padauk', ts: 100,
+  }),
+  mk('gl-golden-glow', 'Glass Golden', 'မှန်ကြည် ရွှေရောင်', 'Dhamma', img('offline-spiritual-golden'), {
+    textAlignment: 'center', titleColor: '#ffffff', ...outline(7, '#451a03', 4, 0),
+    ...box('rgba(255,247,205,0.2)', 2, 'rgba(253,224,71,0.6)', 44, 44, 26), ...hl('rgba(120,53,15,0.75)', '#fef3c7', 14),
+    ...sub('#ffffff'), ...char('square', '#451a03', undefined, 0), charLeft: true, hp: [520, -270], hs: 30, font: 'padauk', ts: 100,
   }),
 ];
