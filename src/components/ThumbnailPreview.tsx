@@ -38,6 +38,28 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
   };
 
   const backgroundElement = () => {
+    if (state.backgroundType === 'video') {
+      // Live background: looping muted video (autoplay needs muted + playsInline on mobile)
+      return (
+        <video
+          key={state.background}
+          src={state.background}
+          autoPlay
+          loop
+          muted
+          playsInline
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            filter: `brightness(${state.bgBrightness}%) saturate(${state.bgSaturation}%)`,
+            zIndex: 0
+          }}
+        />
+      );
+    }
     if (state.backgroundType === 'image') {
       return (
         <img 

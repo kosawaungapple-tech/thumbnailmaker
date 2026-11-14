@@ -41,7 +41,7 @@ export interface ThumbnailState {
   highlight: string;
   idea: string;
   background: string;
-  backgroundType: 'color' | 'gradient' | 'image';
+  backgroundType: 'color' | 'gradient' | 'image' | 'video';
   selectedBgId?: string;
   // Character/Person layer
   characterImage: string | null;
