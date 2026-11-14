@@ -10,6 +10,7 @@ import { toPng } from 'html-to-image';
 import confetti from 'canvas-confetti';
 import { removeBgFast, preloadBgModel } from './utils/removeBg';
 import { BUILTIN_BACKGROUNDS, BackgroundItem } from './data/backgrounds';
+import { LIVE_BACKGROUNDS } from './data/liveBackgrounds';
 import { urlToDataUrl, processUploadedFile, preloadAllImagesInElement } from './utils/imageUtils';
 import { 
   Download, 
@@ -2978,6 +2979,29 @@ export default function App() {
  Upload Custom BG (Image / GIF / Video)
                         </button>
                         <input id="bg-upload" type="file" hidden accept="image/*,video/*" onChange={(e) => handleImageUpload(e, 'background')} />
+
+                        {/* Ready-made live (moving) backgrounds */}
+                        <div className="space-y-2">
+                          <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Live Backgrounds (ရွေ့နေသော)</div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {LIVE_BACKGROUNDS.map((lb) => {
+                              const isSelected = state.backgroundType === 'video' && state.background === lb.url;
+                              return (
+                                <button
+                                  key={lb.id}
+                                  onClick={() => updateState({ background: lb.url, backgroundType: 'video', selectedBgId: lb.id })}
+                                  className={`aspect-video rounded-lg overflow-hidden border-2 transition-all relative ${
+                                    isSelected ? 'border-blue-500 ring-2 ring-blue-500/40' : 'border-transparent hover:border-zinc-700'
+                                  }`}
+                                  title={lb.label}
+                                >
+                                  <img src={lb.poster} alt={lb.label} className="w-full h-full object-cover" loading="lazy" />
+                                  <span className="absolute bottom-1 right-1 bg-black/85 text-[7px] font-black text-sky-300 px-1 py-0.5 rounded border border-sky-500/40">LIVE</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
 
                         {/* Category filter tabs */}
                         <div className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
