@@ -381,7 +381,6 @@ export default function App() {
     if (!previewRef.current) return;
     setIsExporting(true);
     setExportError(null);
-    const restoreVideos: Array<() => void> = [];
 
     const isIOS = typeof navigator !== 'undefined' && (
       /iPad|iPhone|iPod/.test(navigator.userAgent) || 
@@ -423,23 +422,6 @@ export default function App() {
             await img.decode();
           } catch {}
         }
-      }
-
-      // STEP 4: html-to-image cannot render <video>, so swap each live background
-      // video for a still of its current frame during capture (restored in finally).
-      for (const v of Array.from(previewRef.current.querySelectorAll('video'))) {
-        if (!v.videoWidth || !v.parentElement) continue;
-        const c = document.createElement('canvas');
-        c.width = v.videoWidth;
-        c.height = v.videoHeight;
-        c.getContext('2d')?.drawImage(v, 0, 0);
-        const frame = new Image();
-        frame.src = c.toDataURL('image/jpeg', 0.92);
-        try { await frame.decode(); } catch {}
-        frame.style.cssText = v.style.cssText;
-        v.parentElement.insertBefore(frame, v);
-        v.style.display = 'none';
-        restoreVideos.push(() => { frame.remove(); v.style.display = ''; });
       }
 
       // Allow brief render tick for DOM & GPU sync
@@ -545,7 +527,6 @@ export default function App() {
       console.error('Export failed', err);
       setExportError('ပုံထုတ်ယူရာတွင် အမှားဖြစ်သွားပါသည်။ ကျေးဇူးပြု၍ ထပ်မံကြိုးစားကြည့်ပါ။');
     } finally {
-      restoreVideos.forEach(fn => fn());
       setIsExporting(false);
     }
   };
@@ -851,15 +832,7 @@ export default function App() {
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'background' | 'characterImage') => {
     const file = e.target.files?.[0];
-    if (file && field === 'background' && file.type.startsWith('video/')) {
-      // Live background: keep the video as-is, play it from a blob URL
-      updateState({ background: URL.createObjectURL(file), backgroundType: 'video', selectedBgId: undefined });
-    } else if (file && field === 'background' && file.type === 'image/gif') {
-      // GIF: must not go through canvas optimisation (that would flatten it to one frame)
-      const reader = new FileReader();
-      reader.onload = (ev) => updateState({ background: ev.target?.result as string, backgroundType: 'image', selectedBgId: undefined });
-      reader.readAsDataURL(file);
-    } else if (file) {
+    if (file) {
       try {
         const optimizedDataUrl = await processUploadedFile(file, field === 'background' ? 1920 : 1600);
         if (field === 'background') {
@@ -2956,9 +2929,9 @@ export default function App() {
                     <div className="grid grid-cols-2 gap-2">
                       <button 
                         onClick={() => updateState({ backgroundType: 'image' })}
-                        className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${(state.backgroundType === 'image' || state.backgroundType === 'video') ? 'bg-blue-500 border-blue-400 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-500'}`}
+                        className={`py-2 rounded-lg text-[9px] font-black uppercase border transition-all ${state.backgroundType === 'image' ? 'bg-blue-500 border-blue-400 text-white' : 'bg-zinc-950 border-zinc-800 text-zinc-500'}`}
                       >
-                        Image / Live
+                        Image
                       </button>
                       <button 
                         onClick={() => updateState({ backgroundType: 'gradient' })}
@@ -2968,16 +2941,16 @@ export default function App() {
                       </button>
                     </div>
 
-                    {(state.backgroundType === 'image' || state.backgroundType === 'video') && (
+                    {state.backgroundType === 'image' && (
                       <div className="space-y-4">
                         <button 
                           onClick={() => document.getElementById('bg-upload')?.click()}
                           className="w-full flex items-center justify-center gap-2 p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-[9px] font-black uppercase text-zinc-400 hover:border-blue-500 hover:text-blue-400 transition-all"
                         >
                           <ImageIcon size={14} />
- Upload Custom BG (Image / GIF / Video)
+                          Upload Custom BG
                         </button>
-                        <input id="bg-upload" type="file" hidden accept="image/*,video/*" onChange={(e) => handleImageUpload(e, 'background')} />
+                        <input id="bg-upload" type="file" hidden accept="image/*" onChange={(e) => handleImageUpload(e, 'background')} />
 
                         {/* Category filter tabs */}
                         <div className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
