@@ -6,7 +6,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ThumbnailPreview } from './components/ThumbnailPreview';
 import { ThumbnailState, FontConfig, ThemeType } from './types';
-import { toPng } from 'html-to-image';
+import { toPng, getFontEmbedCSS } from 'html-to-image';
+import { getLocalFontEmbedCSS, ensureFontsLoaded } from './utils/localFonts';
 import confetti from 'canvas-confetti';
 import { removeBgFast, preloadBgModel } from './utils/removeBg';
 import { BUILTIN_BACKGROUNDS, BackgroundItem } from './data/backgrounds';
@@ -424,6 +425,26 @@ export default function App() {
         }
       }
 
+      // STEP 4: Make sure every font used on the canvas is loaded, then build the font CSS that gets
+      // embedded in the exported image. Without this the export falls back to a system font and the
+      // text no longer matches the preview (different widths -> wrapped lines / overflowing boxes).
+      await ensureFontsLoaded([state.fontFamily, state.titleFont, state.title2Font, state.subtitleFont, state.highlightFont]);
+
+      let fontEmbedCSS = '';
+      try {
+        fontEmbedCSS = await getLocalFontEmbedCSS(); // bundled Myanmar fonts (fast + reliable)
+      } catch (fontErr) {
+        console.warn('Bundled font embed failed', fontErr);
+      }
+      try {
+        // Best effort for other fonts (Latin Google fonts, uploaded fonts); never block the export
+        const extraCSS = await Promise.race([
+          getFontEmbedCSS(previewRef.current),
+          new Promise<string>(resolve => setTimeout(() => resolve(''), 6000)),
+        ]);
+        fontEmbedCSS += '\n' + extraCSS;
+      } catch {}
+
       // Allow brief render tick for DOM & GPU sync
       await new Promise(r => setTimeout(r, 60));
 
@@ -443,6 +464,19 @@ export default function App() {
       // On iOS Safari, excessive canvas dimensions/pixelRatio can trigger WebKit canvas memory errors
       const exportPixelRatio = isIOS ? 1.5 : 2;
 
+      // Safari/WebKit paints fonts & images only from the 2nd render of an SVG snapshot, so the first
+      // render is a cheap throw-away warm-up.
+      try {
+        await toPng(previewRef.current, {
+          cacheBust: false,
+          width: dims.width,
+          height: dims.height,
+          pixelRatio: 0.1,
+          fontEmbedCSS,
+          filter: filterFn,
+        });
+      } catch {}
+
       let dataUrl: string;
       try {
         dataUrl = await toPng(previewRef.current, {
@@ -451,6 +485,7 @@ export default function App() {
           height: dims.height,
           pixelRatio: exportPixelRatio,
           backgroundColor: state.backgroundType === 'color' ? state.background : '#000000',
+          fontEmbedCSS,
           filter: filterFn,
         });
       } catch (firstErr) {
@@ -461,7 +496,7 @@ export default function App() {
           height: dims.height,
           pixelRatio: 1, // Safe 1x fallback
           backgroundColor: state.backgroundType === 'color' ? state.background : '#000000',
-          skipFonts: true,
+          fontEmbedCSS, // keep fonts in the fallback too (skipFonts made the text differ from the preview)
           filter: filterFn,
         });
       }
