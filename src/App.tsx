@@ -10,7 +10,7 @@ import { toPng } from 'html-to-image';
 import confetti from 'canvas-confetti';
 import { removeBgFast, preloadBgModel } from './utils/removeBg';
 import { BUILTIN_BACKGROUNDS, BackgroundItem } from './data/backgrounds';
-import { LIVE_BACKGROUNDS, LIVE_CATEGORIES, LiveCategory } from './data/liveBackgrounds';
+import { LIVE_BACKGROUNDS } from './data/liveBackgrounds';
 import { urlToDataUrl, processUploadedFile, preloadAllImagesInElement } from './utils/imageUtils';
 import { 
   Download, 
@@ -263,7 +263,6 @@ export default function App() {
   const [isExporting, setIsExporting] = useState(false);
   const [isRemovingBg, setIsRemovingBg] = useState(false);
   const [bgRemoveProgress, setBgRemoveProgress] = useState(0);
-  const [liveCategory, setLiveCategory] = useState<LiveCategory | 'All'>('All');
   const [activeTab, setActiveTab] = useState<'content' | 'character' | 'style' | 'border' | 'settings'>('content');
   const previewRef = useRef<HTMLDivElement>(null);
 
@@ -2984,24 +2983,8 @@ export default function App() {
                         {/* Ready-made live (moving) backgrounds */}
                         <div className="space-y-2">
                           <div className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Live Backgrounds (ရွေ့နေသော)</div>
-                          <div className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
-                            {LIVE_CATEGORIES.map(c => (
-                              <button
-                                key={c.key}
-                                type="button"
-                                onClick={() => setLiveCategory(c.key)}
-                                className={`px-2.5 py-1 rounded-lg text-[9px] font-bold whitespace-nowrap transition-all ${
-                                  liveCategory === c.key
-                                    ? 'bg-sky-600 text-white shadow-sm'
-                                    : 'bg-zinc-950 text-zinc-400 border border-zinc-800 hover:text-zinc-200 hover:bg-zinc-900'
-                                }`}
-                              >
-                                {c.label}
-                              </button>
-                            ))}
-                          </div>
                           <div className="grid grid-cols-3 gap-2">
-                            {LIVE_BACKGROUNDS.filter(lb => liveCategory === 'All' || lb.category === liveCategory).map((lb) => {
+                            {LIVE_BACKGROUNDS.map((lb) => {
                               const isSelected = state.backgroundType === 'video' && state.background === lb.url;
                               return (
                                 <button
