@@ -127,6 +127,15 @@ const INITIAL_STATE: ThumbnailState = {
   titleSize: 110,
   title2Size: 110,
   subtitleSize: 52,
+  channelName: '',
+  channelNameSize: 34,
+  channelNameColor: '#ffffff',
+  channelNameFont: 'Noto Sans Myanmar',
+  channelNameLetterSpacing: 3,
+  channelNameBar: true,
+  channelNameBarColor: '#d4af37',
+  channelNameAnchor: 'left',
+  channelNamePos: { x: 0, y: 0 },
   highlightSize: 40,
   titleFont: 'Noto Sans Myanmar',
   title2Font: 'Noto Sans Myanmar',
@@ -428,7 +437,7 @@ export default function App() {
       // STEP 4: Make sure every font used on the canvas is loaded, then build the font CSS that gets
       // embedded in the exported image. Without this the export falls back to a system font and the
       // text no longer matches the preview (different widths -> wrapped lines / overflowing boxes).
-      await ensureFontsLoaded([state.fontFamily, state.titleFont, state.title2Font, state.subtitleFont, state.highlightFont]);
+      await ensureFontsLoaded([state.fontFamily, state.titleFont, state.title2Font, state.subtitleFont, state.highlightFont, state.channelNameFont]);
 
       let fontEmbedCSS = '';
       try {
@@ -952,6 +961,7 @@ export default function App() {
       title2Font: targetFont,
       subtitleFont: targetFont,
       highlightFont: targetFont,
+      channelNameFont: targetFont,
     });
     setFontUploadMessage({
       type: 'success',
@@ -2236,6 +2246,120 @@ export default function App() {
                             ))}
                           </div>
                         </div>
+                      )}
+                    </div>
+
+                    <div className="h-px bg-zinc-800" />
+
+                    {/* Channel Name Section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase">Channel Name (Channel နာမည်)</label>
+                        <button
+                          type="button"
+                          onClick={() => updateState({ channelNameBar: state.channelNameBar === false })}
+                          className={`px-2 py-1 rounded text-[9px] font-bold uppercase transition-all ${state.channelNameBar !== false ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-500'}`}
+                        >
+                          BAR {state.channelNameBar !== false ? 'ON' : 'OFF'}
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={state.channelName || ''}
+                        onChange={(e) => updateState({ channelName: e.target.value })}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm outline-none focus:border-blue-500 transition-all"
+                        placeholder="e.g. BURMA MINUTES (ဗလာထားရင် မပြပါ)"
+                      />
+
+                      {state.channelName && (
+                        <>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 space-y-2">
+                              <div className="flex justify-between items-center">
+                                <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">Font Size</label>
+                                <span className="text-[10px] text-blue-400 font-mono font-bold">{state.channelNameSize || 34}px</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="16"
+                                max="90"
+                                step="1"
+                                value={state.channelNameSize || 34}
+                                onChange={(e) => updateState({ channelNameSize: parseInt(e.target.value) || 34 })}
+                                className="w-full accent-blue-500"
+                              />
+                              <div className="flex justify-between items-center pt-1 border-t border-zinc-900">
+                                <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">Spacing</label>
+                                <span className="text-[10px] text-blue-400 font-mono font-bold">{state.channelNameLetterSpacing ?? 3}px</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0"
+                                max="14"
+                                step="1"
+                                value={state.channelNameLetterSpacing ?? 3}
+                                onChange={(e) => updateState({ channelNameLetterSpacing: parseInt(e.target.value) || 0 })}
+                                className="w-full accent-blue-500"
+                              />
+                            </div>
+
+                            <div className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 space-y-2">
+                              <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">Text Color</label>
+                              <input
+                                type="color"
+                                value={state.channelNameColor || '#ffffff'}
+                                onChange={(e) => updateState({ channelNameColor: e.target.value })}
+                                className="w-full h-7 rounded border-0 cursor-pointer"
+                              />
+                              <div className="flex items-center justify-between">
+                                {['#ffffff', '#facc15', '#d4af37', '#f87171', '#38bdf8'].map(c => (
+                                  <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => updateState({ channelNameColor: c })}
+                                    className={`w-4 h-4 rounded-full border ${(state.channelNameColor || '#ffffff').toLowerCase() === c ? 'ring-2 ring-blue-500 scale-110 border-white' : 'border-zinc-700'}`}
+                                    style={{ backgroundColor: c }}
+                                  />
+                                ))}
+                              </div>
+                              {state.channelNameBar !== false && (
+                                <div className="flex items-center justify-between pt-1 border-t border-zinc-900">
+                                  <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">Bar Color</label>
+                                  <input
+                                    type="color"
+                                    value={state.channelNameBarColor || '#d4af37'}
+                                    onChange={(e) => updateState({ channelNameBarColor: e.target.value })}
+                                    className="w-8 h-6 rounded border-0 cursor-pointer bg-transparent"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {(['left', 'center', 'right'] as const).map(a => (
+                              <button
+                                key={a}
+                                type="button"
+                                onClick={() => updateState({ channelNameAnchor: a, channelNamePos: { x: 0, y: 0 } })}
+                                className={`flex-1 px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all ${
+                                  (state.channelNameAnchor || 'left') === a ? 'bg-blue-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
+                                }`}
+                              >
+                                {a === 'left' ? 'ဘယ်' : a === 'center' ? 'အလယ်' : 'ညာ'}
+                              </button>
+                            ))}
+                          </div>
+
+                          <FontSelector
+                            label="Channel Name Font (Channel နာမည် ဖောင့်)"
+                            value={state.channelNameFont || state.fontFamily || state.titleFont}
+                            onChange={(f) => updateState({ channelNameFont: f })}
+                            customFonts={customFonts}
+                            onOpenCustomFontUpload={() => setActiveTab('settings')}
+                          />
+                          <p className="text-[9px] text-zinc-500">ပုံပေါ်မှာ ဆွဲရွှေ့ပြီး နေရာပြောင်းနိုင်ပါတယ်။</p>
+                        </>
                       )}
                     </div>
 

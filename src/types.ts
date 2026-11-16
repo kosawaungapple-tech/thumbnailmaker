@@ -108,6 +108,16 @@ export interface ThumbnailState {
   animationIteration?: 'once' | 'infinite';
   animationTarget?: 'title1' | 'title2' | 'both';
   animationPlayKey?: number;
+  // Channel name tag (small branded label, e.g. "| BURMA MINUTES"); hidden while empty
+  channelName?: string;
+  channelNameSize?: number;
+  channelNameColor?: string;
+  channelNameFont?: string;
+  channelNameLetterSpacing?: number;
+  channelNameBar?: boolean;
+  channelNameBarColor?: string;
+  channelNameAnchor?: 'left' | 'center' | 'right';
+  channelNamePos?: { x: number; y: number };
   // Drag positions
   titlePos: { x: number; y: number };
   title2Pos: { x: number; y: number };

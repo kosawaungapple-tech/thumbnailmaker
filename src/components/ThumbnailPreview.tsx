@@ -796,6 +796,74 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
             )}
           </div>
 
+          {/* Channel name tag (top corner, draggable) */}
+          {state.channelName && (() => {
+            const chSize = state.channelNameSize || 34;
+            const chPad = state.canvasRatio === '9:16' ? 40 : 56;
+            const chPos = state.channelNamePos || { x: 0, y: 0 };
+            const chAnchor = state.channelNameAnchor || 'left';
+            return (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: chPad - 8,
+                  left: chPad,
+                  right: chPad,
+                  display: 'flex',
+                  justifyContent: chAnchor === 'right' ? 'flex-end' : chAnchor === 'center' ? 'center' : 'flex-start',
+                  zIndex: 20,
+                  pointerEvents: 'none',
+                }}
+              >
+                <motion.div
+                  drag
+                  dragMomentum={false}
+                  onDragEnd={(_, info) => {
+                    onUpdate({ channelNamePos: { x: chPos.x + info.offset.x / scale, y: chPos.y + info.offset.y / scale } });
+                  }}
+                  initial={false}
+                  animate={{ x: chPos.x, y: chPos.y }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: `${Math.round(chSize * 0.4)}px`,
+                    cursor: 'grab',
+                    userSelect: 'none',
+                    touchAction: 'none',
+                    pointerEvents: 'auto',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {state.channelNameBar !== false && (
+                    <span
+                      style={{
+                        display: 'block',
+                        width: `${Math.max(4, Math.round(chSize * 0.13))}px`,
+                        height: `${Math.round(chSize * 1.1)}px`,
+                        backgroundColor: state.channelNameBarColor || '#d4af37',
+                        borderRadius: '2px',
+                        flexShrink: 0,
+                      }}
+                    />
+                  )}
+                  <span
+                    style={{
+                      fontSize: `${chSize}px`,
+                      fontFamily: state.channelNameFont || state.fontFamily || state.titleFont,
+                      fontWeight: 800,
+                      letterSpacing: `${state.channelNameLetterSpacing ?? 3}px`,
+                      color: state.channelNameColor || '#ffffff',
+                      lineHeight: 1.2,
+                      ...textShadowStyle,
+                    }}
+                  >
+                    {state.channelName}
+                  </span>
+                </motion.div>
+              </div>
+            );
+          })()}
+
           {/* Abstract geometric elements based on theme */}
           {state.theme === 'gaming' && (
             <div className="absolute top-0 right-0 w-1/2 h-full opacity-30 z-1 pointer-events-none">
