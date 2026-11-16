@@ -272,6 +272,16 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
 
   const titleBgAndShape = getTitleBackgroundAndShape();
 
+  // Colour correction applies to the picture only (not to the outline / glow / shadow around it)
+  const characterColorFilter = (): string | undefined => {
+    const b = state.characterBrightness ?? 100;
+    const c = state.characterContrast ?? 100;
+    const sat = state.characterSaturation ?? 100;
+    const h = state.characterHue ?? 0;
+    if (b === 100 && c === 100 && sat === 100 && h === 0) return undefined;
+    return `brightness(${b}%) contrast(${c}%) saturate(${sat}%) hue-rotate(${h}deg)`;
+  };
+
   const characterFilter = (): string => {
     let filters = ['drop-shadow(0 20px 30px rgba(0,0,0,0.5))'];
     
@@ -539,6 +549,7 @@ export const ThumbnailPreview: React.FC<Props> = ({ state, onUpdate, previewRef 
                     objectFit: 'cover',
                     aspectRatio: state.characterShape !== 'none' ? '1/1' : 'auto',
                     clipPath: getCharacterClipPath(),
+                    filter: characterColorFilter(),
                     userSelect: 'none',
                     pointerEvents: 'none',
                   }}

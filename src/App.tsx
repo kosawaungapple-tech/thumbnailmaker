@@ -99,6 +99,10 @@ const INITIAL_STATE: ThumbnailState = {
   characterOutlineColor: '#ffffff',
   characterOutlineWidth: 3,
   characterGlow: false,
+  characterBrightness: 100,
+  characterContrast: 100,
+  characterSaturation: 100,
+  characterHue: 0,
   characterGlowColor: 'rgba(255, 255, 255, 0.3)',
   characterShape: 'none',
   bgBrightness: 100,
@@ -3021,6 +3025,63 @@ export default function App() {
                                 Flip Horizontal {state.characterFlip ? '(Flipped)' : ''}
                               </button>
                             </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold text-zinc-500 uppercase">Color & Brightness (အရောင်/အလင်း)</label>
+                            <button
+                              type="button"
+                              onClick={() => updateState({ characterBrightness: 100, characterContrast: 100, characterSaturation: 100, characterHue: 0 })}
+                              className="px-2 py-1 rounded text-[9px] font-bold uppercase bg-zinc-800 text-zinc-300 hover:bg-zinc-700 active:scale-95"
+                            >
+                              Reset
+                            </button>
+                          </div>
+                          <div className="space-y-3 bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {[
+                                { label: 'Original', v: { characterBrightness: 100, characterContrast: 100, characterSaturation: 100, characterHue: 0 } },
+                                { label: 'လင်းစေ', v: { characterBrightness: 118, characterContrast: 105, characterSaturation: 108, characterHue: 0 } },
+                                { label: 'Pop', v: { characterBrightness: 108, characterContrast: 118, characterSaturation: 128, characterHue: 0 } },
+                                { label: 'B&W', v: { characterBrightness: 105, characterContrast: 115, characterSaturation: 0, characterHue: 0 } },
+                              ].map(pr => (
+                                <button
+                                  key={pr.label}
+                                  type="button"
+                                  onClick={() => updateState(pr.v)}
+                                  className="px-1.5 py-1.5 rounded-md text-[9px] font-bold bg-zinc-900 text-zinc-300 border border-zinc-800 hover:bg-zinc-800 active:scale-95 truncate"
+                                >
+                                  {pr.label}
+                                </button>
+                              ))}
+                            </div>
+                            {([
+                              { key: 'characterBrightness', label: 'Brightness (အလင်း)', min: 40, max: 200, unit: '%', def: 100 },
+                              { key: 'characterContrast', label: 'Contrast', min: 50, max: 180, unit: '%', def: 100 },
+                              { key: 'characterSaturation', label: 'Saturation (အရောင်ရင့်)', min: 0, max: 220, unit: '%', def: 100 },
+                              { key: 'characterHue', label: 'Hue (အရောင်ပြောင်း)', min: -180, max: 180, unit: '°', def: 0 },
+                            ] as const).map(row => {
+                              const val = (state[row.key] as number | undefined) ?? row.def;
+                              return (
+                                <div key={row.key} className="space-y-1">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider">{row.label}</span>
+                                    <span className="text-[10px] text-blue-400 font-mono font-bold">{val}{row.unit}</span>
+                                  </div>
+                                  <input
+                                    type="range"
+                                    min={row.min}
+                                    max={row.max}
+                                    step="1"
+                                    value={val}
+                                    onChange={(e) => updateState({ [row.key]: parseInt(e.target.value) } as Partial<ThumbnailState>)}
+                                    className="w-full accent-blue-500"
+                                  />
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
 

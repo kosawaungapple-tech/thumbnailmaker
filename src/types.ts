@@ -54,6 +54,11 @@ export interface ThumbnailState {
   characterGlow: boolean;
   characterGlowColor: string;
   characterShape: 'none' | 'circle' | 'square' | 'hexagon' | 'pentagon' | 'rhombus';
+  // Character colour adjustments (100 = unchanged; hue 0 = unchanged)
+  characterBrightness?: number;
+  characterContrast?: number;
+  characterSaturation?: number;
+  characterHue?: number;
   characterPlaceholder?: boolean;
   activeTemplateId?: string;
   // Filters & Effects
